@@ -1,0 +1,48 @@
+/* React Chat Elements styles */
+.rce-container-mlist {
+  height: 100%;
+  overflow: auto;
+}
+
+.rce-mbox {
+  box-shadow: none;
+  max-width: 80%;
+}
+
+.rce-mbox-photo {
+  max-width: 300px;
+}
+
+.rce-mbox-photo--img {
+  max-height: 200px;
+  object-fit: cover;
+}
+
+.rce-mbox-file {
+  min-width: 200px;
+}
+
+.rce-mbox-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rce-mbox-time {
+  bottom: -20px;
+  font-size: 11px;
+}
+
+/* Fix message bubble tail */
+.rce-mbox-right-notch,
+.rce-mbox-left-notch {
+  position: absolute;
+  top: 15px;
+}
+
+.rce-mbox-right-notch {
+  right: -8px;
+}
+
+.rce-mbox-left-notch {
+  left: -8px;
+} 
