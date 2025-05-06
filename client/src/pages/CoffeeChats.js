@@ -26,16 +26,19 @@ import {
   Rating,
   TextField,
   Alert,
-  Paper
+  Paper,
+  CircularProgress
 } from '@mui/material';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import CoffeeChatCard from '../components/CoffeeChat/CoffeeChatCard';
 import InfoIcon from '@mui/icons-material/Info';
 import EventIcon from '@mui/icons-material/Event';
+import axios from 'axios';
 
-// Import mock data for development
-import { MOCK_COFFEE_CHATS } from '../mockData';
+// Define API_URL with explicit port 5000 to match what the browser is using
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+console.log('CoffeeChats API_URL initialized as:', API_URL);
 
 // Tab panel component for the different sections
 function TabPanel(props) {
@@ -63,6 +66,7 @@ const CoffeeChats = () => {
   const [tabValue, setTabValue] = useState(0);
   const [coffeeChats, setCoffeeChats] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState(null);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [currentChatId, setCurrentChatId] = useState(null);
   const [reviewData, setReviewData] = useState({
@@ -70,22 +74,49 @@ const CoffeeChats = () => {
     comment: ''
   });
 
-  // Fetch coffee chats from API (using mock data for now)
+  // Fetch coffee chats from API
   useEffect(() => {
     const fetchCoffeeChats = async () => {
       setIsLoading(true);
+      setApiError(null);
+      
       try {
-        // In a real app, this would be an API call
-        // const response = await axios.get('/api/coffee-chats');
-        // setCoffeeChats(response.data);
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('Authentication required');
+        }
         
-        // Using mock data for now
-        setTimeout(() => {
-          setCoffeeChats(MOCK_COFFEE_CHATS);
-          setIsLoading(false);
-        }, 500);
+        // Ensure API_URL has the correct format
+        let baseUrl = API_URL;
+        if (!baseUrl.includes('/api')) {
+          baseUrl = `${baseUrl}/api`;
+        }
+        console.log('Normalized baseUrl:', baseUrl);
+        
+        // Construct the full URL carefully
+        const sessionsUrl = `${baseUrl}/sessions`;
+        console.log('Fetching coffee chats from:', sessionsUrl);
+        
+        const response = await axios.get(sessionsUrl, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.data && response.data.success) {
+          setCoffeeChats(response.data.data.sessions || []);
+        } else {
+          setCoffeeChats([]);
+        }
       } catch (error) {
         console.error('Error fetching coffee chats:', error);
+        setApiError(
+          error.response?.status === 404 
+            ? 'This feature is not yet available. The API endpoint does not exist.'
+            : 'Failed to load your coffee chats. Please try again.'
+        );
+        setCoffeeChats([]);
+      } finally {
         setIsLoading(false);
       }
     };
@@ -124,22 +155,30 @@ const CoffeeChats = () => {
   // Submit review
   const handleSubmitReview = async () => {
     try {
-      // In a real app, this would be an API call
-      // await axios.post(`/api/coffee-chats/${currentChatId}/feedback`, reviewData);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
       
-      console.log('Review submitted:', {
-        chatId: currentChatId,
-        ...reviewData
-      });
-      
-      // Update the local state to reflect the change
-      setCoffeeChats(prev => 
-        prev.map(chat => 
-          chat.id === currentChatId 
-            ? { ...chat, hasReview: true } 
-            : chat
-        )
+      const response = await axios.post(`${API_URL}/sessions/${currentChatId}/feedback`, 
+        reviewData, 
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
       );
+      
+      if (response.data && response.data.success) {
+        // Update the local state to reflect the change
+        setCoffeeChats(prev => 
+          prev.map(chat => 
+            chat.id === currentChatId 
+              ? { ...chat, hasReview: true } 
+              : chat
+          )
+        );
+      }
       
       // Close the dialog and reset the form
       setReviewDialogOpen(false);
@@ -147,6 +186,7 @@ const CoffeeChats = () => {
       setReviewData({ rating: 5, comment: '' });
     } catch (error) {
       console.error('Error submitting review:', error);
+      alert('Failed to submit review. Please try again.');
     }
   };
 
@@ -160,18 +200,49 @@ const CoffeeChats = () => {
   );
 
   // Handle coffee chat actions
-  const handleCancelChat = (chatId) => {
-    console.log('Cancel chat:', chatId);
-    // In a real app, this would update the status via API
+  const handleCancelChat = async (chatId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+      
+      const response = await axios.put(`${API_URL}/sessions/${chatId}/status`, 
+        { status: 'cancelled' },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      
+      if (response.data && response.data.success) {
+        // Update the local state to reflect the change
+        setCoffeeChats(prev => 
+          prev.map(chat => 
+            chat.id === chatId 
+              ? { ...chat, status: 'cancelled' } 
+              : chat
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error cancelling chat:', error);
+      alert('Failed to cancel the session. Please try again.');
+    }
   };
 
   const handleRescheduleChat = (chatId) => {
-    console.log('Reschedule chat:', chatId);
-    // In a real app, this would open a reschedule dialog
+    // This would open a reschedule dialog in a real app
+    alert('Reschedule functionality is not yet implemented');
   };
 
   const handleJoinMeeting = (link) => {
-    window.open(link, '_blank');
+    if (link) {
+      window.open(link, '_blank');
+    } else {
+      alert('Meeting link is not available.');
+    }
   };
 
   return (
@@ -208,6 +279,16 @@ const CoffeeChats = () => {
         </Box>
       </Alert>
       
+      {/* API Error Alert */}
+      {apiError && (
+        <Alert 
+          severity="error" 
+          sx={{ mb: 3 }}
+        >
+          {apiError}
+        </Alert>
+      )}
+      
       {/* Tab Navigation */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs 
@@ -223,7 +304,9 @@ const CoffeeChats = () => {
       {/* Upcoming Coffee Chats Tab */}
       <TabPanel value={tabValue} index={0}>
         {isLoading ? (
-          <Typography>Loading your coffee chats...</Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress />
+          </Box>
         ) : upcomingChats.length === 0 ? (
           <Box sx={{ py: 4, textAlign: 'center' }}>
             <Typography variant="h6" gutterBottom>
@@ -250,25 +333,24 @@ const CoffeeChats = () => {
                 4. Your confirmed schedules will appear here
               </Typography>
             </Paper>
-            <Button
-              variant="contained"
+            <Button 
+              variant="contained" 
               color="primary"
               component={Link}
               to="/professionals"
-              sx={{ mt: 2 }}
             >
               Find Professionals
             </Button>
           </Box>
         ) : (
           <Grid container spacing={3}>
-            {upcomingChats.map(chat => (
-              <Grid item xs={12} md={6} key={chat.id}>
-                <CoffeeChatCard
-                  coffeeChat={chat}
-                  onCancel={handleCancelChat}
-                  onReschedule={handleRescheduleChat}
-                  onJoinMeeting={handleJoinMeeting}
+            {upcomingChats.map((chat) => (
+              <Grid item xs={12} sm={6} md={4} key={chat.id}>
+                <CoffeeChatCard 
+                  chat={chat}
+                  onCancel={() => handleCancelChat(chat.id)}
+                  onReschedule={() => handleRescheduleChat(chat.id)}
+                  onJoinMeeting={() => handleJoinMeeting(chat.meetingLink)}
                 />
               </Grid>
             ))}
@@ -279,24 +361,25 @@ const CoffeeChats = () => {
       {/* Past Coffee Chats Tab */}
       <TabPanel value={tabValue} index={1}>
         {isLoading ? (
-          <Typography>Loading your coffee chats...</Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress />
+          </Box>
         ) : pastChats.length === 0 ? (
           <Box sx={{ py: 4, textAlign: 'center' }}>
             <Typography variant="h6" gutterBottom>
               No past coffee chats
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Your completed and cancelled coffee chats will appear here.
+              Your completed or cancelled coffee chats will appear here.
             </Typography>
           </Box>
         ) : (
           <Grid container spacing={3}>
-            {pastChats.map(chat => (
-              <Grid item xs={12} md={6} key={chat.id}>
-                <CoffeeChatCard
-                  coffeeChat={chat}
-                  isPast={true}
-                  onLeaveReview={!chat.hasReview ? handleLeaveReview : null}
+            {pastChats.map((chat) => (
+              <Grid item xs={12} sm={6} md={4} key={chat.id}>
+                <CoffeeChatCard 
+                  chat={chat}
+                  onReview={() => !chat.hasReview && handleLeaveReview(chat.id)}
                 />
               </Grid>
             ))}
@@ -308,29 +391,34 @@ const CoffeeChats = () => {
       <Dialog open={reviewDialogOpen} onClose={() => setReviewDialogOpen(false)}>
         <DialogTitle>Leave Feedback</DialogTitle>
         <DialogContent>
-          <Box sx={{ mb: 2, mt: 1 }}>
+          <Box sx={{ mt: 2, mb: 3 }}>
             <Typography gutterBottom>How was your experience?</Typography>
             <Rating
               name="rating"
               value={reviewData.rating}
               onChange={handleRatingChange}
               size="large"
+              precision={0.5}
             />
           </Box>
           <TextField
             autoFocus
+            label="Comments"
             name="comment"
-            label="Your feedback"
+            value={reviewData.comment}
+            onChange={handleReviewChange}
             multiline
             rows={4}
             fullWidth
-            value={reviewData.comment}
-            onChange={handleReviewChange}
+            variant="outlined"
+            placeholder="Share your experience and feedback about this coffee chat..."
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setReviewDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSubmitReview} variant="contained">
+          <Button onClick={() => setReviewDialogOpen(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={handleSubmitReview} color="primary" variant="contained">
             Submit Feedback
           </Button>
         </DialogActions>

@@ -90,9 +90,21 @@ const ProfessionalDiscovery = () => {
   const loadProfessionals = async () => {
     try {
       setLoading(true);
+      console.log('Loading professionals with filters:', filters);
       const data = await getProfessionals(filters);
-      setProfessionals(data.professionals);
-      setError(null);
+      
+      // Log the response to help debug
+      console.log('Professionals data received:', data);
+      
+      if (data && data.professionals && data.professionals.length > 0) {
+        console.log(`Found ${data.professionals.length} professionals`);
+        setProfessionals(data.professionals);
+        setError(null);
+      } else {
+        console.warn('No professionals found in API response');
+        setProfessionals([]);
+        setError('No professionals found matching your criteria.');
+      }
     } catch (error) {
       console.error('Error loading professionals:', error);
       setError('Failed to load professionals. Please try again later.');
@@ -332,125 +344,114 @@ const ProfessionalDiscovery = () => {
 
       {/* Results */}
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 8 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
           <CircularProgress />
         </Box>
       ) : error ? (
-        <Alert severity="error" sx={{ my: 2 }}>{error}</Alert>
+        <Paper sx={{ p: 4, textAlign: 'center', mt: 4 }}>
+          <Typography color="error">{error}</Typography>
+          <Button variant="outlined" sx={{ mt: 2 }} onClick={loadProfessionals}>
+            Retry
+          </Button>
+        </Paper>
+      ) : professionals.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center', mt: 4 }}>
+          <Typography variant="h6">No professionals found</Typography>
+          <Typography color="text.secondary" sx={{ mt: 1 }}>
+            Try adjusting your filters or search terms
+          </Typography>
+          <Button variant="outlined" sx={{ mt: 2 }} onClick={() => setFilters({
+            searchTerm: '',
+            industry: 'All',
+            experienceLevel: ''
+          })}>
+            Clear Filters
+          </Button>
+        </Paper>
       ) : (
-        <>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="h6" component="h2">
-              {professionals.length} Professionals Found
-            </Typography>
-          </Box>
-          
-          <Grid container spacing={3}>
-            {professionals.map((professional) => (
-              <Grid item xs={12} sm={6} md={4} key={professional.id}>
-                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 2 }}>
-                  <Box sx={{ position: 'relative', pt: '60%' }}>
-                    <CardMedia
-                      component="img"
-                      image={professional.profilePicture || "https://via.placeholder.com/300x180"}
-                      alt={`${professional.firstName} ${professional.lastName}`}
-                      sx={{ 
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        height: '100%',
-                        width: '100%',
-                        objectFit: 'cover',
-                      }}
-                    />
-                    <Avatar
-                      src={professional.profilePicture}
-                      alt={`${professional.firstName} ${professional.lastName}`}
-                      sx={{
-                        position: 'absolute',
-                        bottom: -48,
-                        left: 16,
-                        width: 96,
-                        height: 96,
-                        border: '4px solid white',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                      }}
-                    />
-                  </Box>
-
-                  <CardContent sx={{ pt: 7, pb: 1, px: 3 }}>
-                    <Typography variant="h6" component="h3" gutterBottom>
-                      {professional.firstName} {professional.lastName}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {professional.title} at {professional.company}
-                    </Typography>
-                    
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <Rating value={professional.rating} precision={0.1} readOnly size="small" />
-                      <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                        ({professional.reviewCount})
+        <Grid container spacing={3} sx={{ mt: 2 }}>
+          {professionals.map((professional) => (
+            <Grid item xs={12} sm={6} md={4} key={professional._id}>
+              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <CardMedia
+                  component="img"
+                  height="140"
+                  image={professional.profileImage || `https://ui-avatars.com/api/?name=${professional.firstName}+${professional.lastName}&background=random`}
+                  alt={`${professional.firstName} ${professional.lastName}`}
+                  sx={{ objectFit: 'cover' }}
+                />
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Typography variant="h6" component="div" gutterBottom>
+                    {professional.firstName} {professional.lastName}
+                  </Typography>
+                  
+                  {professional.profile && (
+                    <>
+                      <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+                        {professional.profile.title || 'Professional'}
                       </Typography>
-                    </Box>
-                    
-                    <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                      <LocationOn fontSize="small" color="action" sx={{ mr: 0.5 }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {professional.location}
-                      </Typography>
-                    </Box>
-                    
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Experience: {professional.yearsOfExperience} years
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {professional.expertise.slice(0, 3).map((expertise, index) => (
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Business fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                        <Typography variant="body2">
+                          {professional.profile.company || 'Freelancer'}
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <LocationOn fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                        <Typography variant="body2">
+                          {professional.profile.location || 'Remote'}
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ my: 2 }}>
+                        {professional.profile.industries && professional.profile.industries.slice(0, 2).map((industry, index) => (
                           <Chip 
                             key={index} 
-                            label={expertise} 
+                            label={industry} 
                             size="small" 
                             sx={{ mr: 0.5, mb: 0.5 }}
                           />
                         ))}
                       </Box>
-                    </Box>
-                    
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      {professional.bio.substring(0, 150)}...
-                    </Typography>
-                  </CardContent>
-                  
-                  <Box sx={{ flexGrow: 1 }} />
-                  
-                  <CardActions sx={{ p: 2, pt: 0 }}>
-                    <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
-                      <Button 
-                        variant="outlined" 
-                        size="medium" 
-                        fullWidth
-                        startIcon={<MessageOutlined />}
-                        onClick={() => handleOpenMatchDialog(professional, 'match')}
-                      >
-                        Match
-                      </Button>
-                      <Button 
-                        variant="contained" 
-                        color="primary" 
-                        size="medium" 
-                        fullWidth
-                        startIcon={<CalendarMonth />}
-                        onClick={() => handleOpenMatchDialog(professional, 'coffeechat')}
-                      >
-                        Coffee Chat
-                      </Button>
-                    </Box>
-                  </CardActions>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        </>
+                      
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {professional.profile.bio ? 
+                          (professional.profile.bio.length > 120 ? 
+                            `${professional.profile.bio.substring(0, 120)}...` : 
+                            professional.profile.bio
+                          ) : 
+                          'No bio provided.'
+                        }
+                      </Typography>
+                    </>
+                  )}
+                </CardContent>
+                <CardActions sx={{ p: 2, pt: 0 }}>
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    startIcon={<MessageOutlined />}
+                    onClick={() => handleOpenMatchDialog(professional, 'match')}
+                  >
+                    Connect
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    size="small"
+                    color="primary"
+                    startIcon={<CalendarMonth />}
+                    onClick={() => handleOpenMatchDialog(professional, 'coffeechat')}
+                    sx={{ ml: 1 }}
+                  >
+                    Request Chat
+                  </Button>
+                </CardActions>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
       )}
 
       {/* Match Dialog */}

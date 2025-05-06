@@ -297,24 +297,23 @@ io.on('connection', (socket) => {
   });
 });
 
-// Connect to MongoDB
+// Connect to MongoDB - making connection string consistent
+console.log('Connecting to MongoDB...');
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/handshake', {
   useNewUrlParser: true,
-  useUnifiedTopology: true,
+  useUnifiedTopology: true
 })
-  .then(() => {
-    console.log('Connected to MongoDB');
-    
-    // Start server once MongoDB is connected
-    server.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-      console.log(`Socket.io server running`);
-    });
-  })
-  .catch((error) => {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
+.then(() => {
+  console.log('Connected to MongoDB (database:', mongoose.connection.db.databaseName + ')');
+  
+  // Start server after successful database connection
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
   });
+})
+.catch((error) => {
+  console.error('MongoDB connection error:', error);
+});
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {

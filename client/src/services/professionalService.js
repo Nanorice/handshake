@@ -1,330 +1,76 @@
 import axios from 'axios';
+import { getAuthToken } from '../utils/authUtils';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
-// Dummy professionals data
-const dummyProfessionals = [
-  {
-    id: '1',
-    firstName: 'Jessica',
-    lastName: 'Parker',
-    email: 'jparker@example.com',
-    title: 'Senior Software Engineer',
-    company: 'Google',
-    industry: 'Technology',
-    yearsOfExperience: 8,
-    location: 'San Francisco, CA',
-    skills: ['JavaScript', 'React', 'Node.js', 'Cloud Computing', 'System Design'],
-    bio: 'I have 8+ years of experience in full-stack development with a focus on scalable web applications. I love mentoring junior developers and sharing my knowledge about modern web development practices.',
-    profilePicture: generateAvatar('1', 'Jessica', 'Parker'),
-    availability: [
-      { day: 'Monday', timeSlots: ['10:00 AM', '2:00 PM'] },
-      { day: 'Wednesday', timeSlots: ['11:00 AM', '4:00 PM'] },
-      { day: 'Friday', timeSlots: ['9:00 AM', '1:00 PM'] }
-    ],
-    expertise: ['Frontend Development', 'React Ecosystem', 'Performance Optimization'],
-    rating: 4.9,
-    reviewCount: 24
-  },
-  {
-    id: '2',
-    firstName: 'Michael',
-    lastName: 'Chen',
-    email: 'mchen@example.com',
-    title: 'Product Manager',
-    company: 'Microsoft',
-    industry: 'Technology',
-    yearsOfExperience: 6,
-    location: 'Seattle, WA',
-    skills: ['Product Strategy', 'User Research', 'Agile', 'Data Analysis', 'Roadmapping'],
-    bio: 'Passionate product manager with experience in both B2B and B2C products. I specialize in product discovery and helping teams build products users love.',
-    profilePicture: generateAvatar('2', 'Michael', 'Chen'),
-    availability: [
-      { day: 'Tuesday', timeSlots: ['3:00 PM', '5:00 PM'] },
-      { day: 'Thursday', timeSlots: ['11:00 AM', '2:00 PM'] }
-    ],
-    expertise: ['Product Discovery', 'User Testing', 'Go-to-Market Strategy'],
-    rating: 4.7,
-    reviewCount: 19
-  },
-  {
-    id: '3',
-    firstName: 'Sarah',
-    lastName: 'Johnson',
-    email: 'sjohnson@example.com',
-    title: 'UX Designer',
-    company: 'Adobe',
-    industry: 'Design',
-    yearsOfExperience: 5,
-    location: 'Austin, TX',
-    skills: ['User Research', 'Wireframing', 'Prototyping', 'Figma', 'Design Systems'],
-    bio: 'I help teams create beautiful and functional digital experiences. My specialty is in conversion-focused design for consumer applications.',
-    profilePicture: generateAvatar('3', 'Sarah', 'Johnson'),
-    availability: [
-      { day: 'Monday', timeSlots: ['1:00 PM', '4:00 PM'] },
-      { day: 'Wednesday', timeSlots: ['10:00 AM', '2:00 PM'] },
-      { day: 'Friday', timeSlots: ['11:00 AM', '3:00 PM'] }
-    ],
-    expertise: ['UX Design', 'Mobile App Design', 'Design Systems'],
-    rating: 4.8,
-    reviewCount: 22
-  },
-  {
-    id: '4',
-    firstName: 'James',
-    lastName: 'Wilson',
-    email: 'jwilson@example.com',
-    title: 'Data Scientist',
-    company: 'Amazon',
-    industry: 'E-commerce',
-    yearsOfExperience: 7,
-    location: 'New York, NY',
-    skills: ['Python', 'Machine Learning', 'SQL', 'Statistics', 'Data Visualization'],
-    bio: 'Data scientist with a background in mathematics and computer science. I enjoy solving complex problems with data and teaching others how to extract insights from their data.',
-    profilePicture: generateAvatar('4', 'James', 'Wilson'),
-    availability: [
-      { day: 'Tuesday', timeSlots: ['9:00 AM', '1:00 PM'] },
-      { day: 'Thursday', timeSlots: ['2:00 PM', '5:00 PM'] }
-    ],
-    expertise: ['Machine Learning', 'Data Analysis', 'Predictive Modeling'],
-    rating: 4.6,
-    reviewCount: 15
-  },
-  {
-    id: '5',
-    firstName: 'Emily',
-    lastName: 'Rodriguez',
-    email: 'erodriguez@example.com',
-    title: 'Marketing Director',
-    company: 'Hubspot',
-    industry: 'Marketing',
-    yearsOfExperience: 10,
-    location: 'Boston, MA',
-    skills: ['Digital Marketing', 'Brand Strategy', 'Content Marketing', 'SEO', 'Social Media'],
-    bio: 'Marketing leader who has helped grow multiple SaaS companies. I specialize in content strategy and inbound marketing techniques.',
-    profilePicture: generateAvatar('5', 'Emily', 'Rodriguez'),
-    availability: [
-      { day: 'Monday', timeSlots: ['11:00 AM', '3:00 PM'] },
-      { day: 'Wednesday', timeSlots: ['1:00 PM', '4:00 PM'] },
-      { day: 'Friday', timeSlots: ['10:00 AM', '2:00 PM'] }
-    ],
-    expertise: ['Content Strategy', 'Growth Marketing', 'Brand Development'],
-    rating: 4.9,
-    reviewCount: 31
-  },
-  {
-    id: '6',
-    firstName: 'David',
-    lastName: 'Kim',
-    email: 'dkim@example.com',
-    title: 'Finance Manager',
-    company: 'Goldman Sachs',
-    industry: 'Finance',
-    yearsOfExperience: 9,
-    location: 'Chicago, IL',
-    skills: ['Financial Analysis', 'Investment Banking', 'Risk Management', 'Excel', 'Financial Modeling'],
-    bio: 'Finance professional with experience in investment banking and corporate finance. I enjoy helping others understand financial concepts and planning their careers in finance.',
-    profilePicture: generateAvatar('6', 'David', 'Kim'),
-    availability: [
-      { day: 'Tuesday', timeSlots: ['10:00 AM', '2:00 PM'] },
-      { day: 'Thursday', timeSlots: ['1:00 PM', '5:00 PM'] }
-    ],
-    expertise: ['Investment Analysis', 'Financial Planning', 'Corporate Finance'],
-    rating: 4.7,
-    reviewCount: 17
-  },
-  {
-    id: '7',
-    firstName: 'Olivia',
-    lastName: 'Martinez',
-    email: 'omartinez@example.com',
-    title: 'HR Director',
-    company: 'Salesforce',
-    industry: 'Human Resources',
-    yearsOfExperience: 12,
-    location: 'San Diego, CA',
-    skills: ['Talent Acquisition', 'Employee Relations', 'Performance Management', 'DEI Initiatives', 'Leadership Development'],
-    bio: 'HR leader passionate about building inclusive workplaces. I specialize in talent development and creating positive work cultures.',
-    profilePicture: generateAvatar('7', 'Olivia', 'Martinez'),
-    availability: [
-      { day: 'Monday', timeSlots: ['9:00 AM', '1:00 PM'] },
-      { day: 'Wednesday', timeSlots: ['2:00 PM', '5:00 PM'] },
-      { day: 'Friday', timeSlots: ['10:00 AM', '3:00 PM'] }
-    ],
-    expertise: ['Talent Management', 'Organizational Development', 'Workplace Culture'],
-    rating: 4.8,
-    reviewCount: 26
-  },
-  {
-    id: '8',
-    firstName: 'Robert',
-    lastName: 'Taylor',
-    email: 'rtaylor@example.com',
-    title: 'Project Manager',
-    company: 'IBM',
-    industry: 'Technology',
-    yearsOfExperience: 8,
-    location: 'Denver, CO',
-    skills: ['Agile', 'Scrum', 'Project Planning', 'Stakeholder Management', 'Risk Management'],
-    bio: 'Certified PMP with experience managing cross-functional teams. I help teams deliver complex projects on time and within budget.',
-    profilePicture: generateAvatar('8', 'Robert', 'Taylor'),
-    availability: [
-      { day: 'Tuesday', timeSlots: ['11:00 AM', '3:00 PM'] },
-      { day: 'Thursday', timeSlots: ['10:00 AM', '2:00 PM'] }
-    ],
-    expertise: ['Agile Project Management', 'Team Leadership', 'Project Planning'],
-    rating: 4.6,
-    reviewCount: 20
-  }
-];
-
-// Helper function to generate a consistent avatar for a user based on their ID
-function generateAvatar(id, firstName, lastName) {
-  // Create avatar based on initials and a pastel color background
-  const initials = `${firstName?.charAt(0) || ''}${lastName?.charAt(0) || ''}`.toUpperCase();
-  const colors = [
-    '6ab04c', 'badc58', 'f9ca24', 'f0932b', 'eb4d4b', 
-    'be2edd', '686de0', '7ed6df', '22a6b3', 'e056fd'
-  ];
-  
-  // Use the id to deterministically select a color
-  const colorIndex = typeof id === 'string' 
-    ? id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) % colors.length
-    : Math.floor(Math.random() * colors.length);
-    
-  const color = colors[colorIndex];
-  
-  // Generate a DiceBear avatar URL (cute minimalist avatars)
-  return `https://api.dicebear.com/7.x/thumbs/svg?seed=${encodeURIComponent(id)}&backgroundColor=${color}`;
-}
+// Define API_URL with explicit port 5000 to match what the browser is using
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+console.log('professionalService API_URL initialized as:', API_URL);
 
 // Get all professionals
 export const getProfessionals = async (filters = {}) => {
   try {
-    // Import userService to access our seeded test users
-    const userService = require('./userService').default;
+    console.log('Fetching professionals with filters:', filters);
     
-    // Get the test professional users
-    const testProfessionals = await userService.getProfessionals();
+    // Get auth token
+    const token = getAuthToken();
     
-    // Map the test users to match the expected format
-    let filteredProfessionals = testProfessionals.map(prof => {
-      return {
-        id: prof._id,
-        firstName: prof.firstName,
-        lastName: prof.lastName,
-        email: prof.email,
-        title: prof.profile?.title || 'Professional',
-        company: prof.profile?.company || 'Company',
-        industry: prof.profile?.industry || 'Technology',
-        yearsOfExperience: prof.profile?.yearsOfExperience || 5,
-        location: prof.profile?.location || 'Remote',
-        skills: prof.profile?.skills || ['Mentoring', 'Career Advice'],
-        bio: prof.profile?.bio || 'Experienced professional ready to help.',
-        profilePicture: generateAvatar(prof._id, prof.firstName, prof.lastName),
-        availability: [
-          { day: 'Monday', timeSlots: ['10:00 AM', '2:00 PM'] },
-          { day: 'Wednesday', timeSlots: ['11:00 AM', '4:00 PM'] },
-        ],
-        expertise: prof.profile?.expertise || ['Career Development', 'Mentorship'],
-        rating: 4.8,
-        reviewCount: Math.floor(Math.random() * 30) + 5
-      };
+    // Ensure we have the correct URL format
+    const baseUrl = API_URL.includes('/api') ? API_URL : `${API_URL}/api`;
+    
+    // Make the API call with the token if available
+    const fullUrl = `${baseUrl}/professionals`.replace(/\/+/g, '/').replace(':/', '://');
+    console.log(`Making API request to: ${fullUrl}`);
+    
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      console.log('Using token for request:', token.substring(0, 10) + '...');
+    } else {
+      console.warn('No auth token available for professionals request');
+    }
+    
+    const response = await axios.get(fullUrl, { 
+      params: filters,
+      headers
     });
     
-    // Apply industry filter
-    if (filters.industry && filters.industry !== 'All') {
-      filteredProfessionals = filteredProfessionals.filter(
-        prof => prof.industry === filters.industry
-      );
+    console.log('Professionals API response:', response.data);
+    
+    if (response.data && response.data.success) {
+      return response.data.data;
     }
     
-    // Apply experience filter
-    if (filters.experienceLevel) {
-      const expRanges = {
-        'entry': { min: 0, max: 3 },
-        'mid': { min: 3, max: 7 },
-        'senior': { min: 7, max: 100 }
-      };
-      
-      const range = expRanges[filters.experienceLevel];
-      if (range) {
-        filteredProfessionals = filteredProfessionals.filter(
-          prof => prof.yearsOfExperience >= range.min && prof.yearsOfExperience <= range.max
-        );
-      }
-    }
-    
-    // Apply search term filter
-    if (filters.searchTerm) {
-      const searchLower = filters.searchTerm.toLowerCase();
-      filteredProfessionals = filteredProfessionals.filter(prof => {
-        const fullName = `${prof.firstName} ${prof.lastName}`.toLowerCase();
-        const title = prof.title.toLowerCase();
-        const company = prof.company.toLowerCase();
-        
-        return (
-          fullName.includes(searchLower) ||
-          title.includes(searchLower) ||
-          company.includes(searchLower) ||
-          (prof.skills && prof.skills.some(skill => skill.toLowerCase().includes(searchLower)))
-        );
-      });
-    }
-    
-    return {
-      professionals: filteredProfessionals
-    };
+    console.warn('API response successful but no data found');
+    return { professionals: [] };
   } catch (error) {
     console.error('Error fetching professionals:', error);
     
-    // Fallback to empty array on error
-    return {
-      professionals: []
-    };
+    // Log more details about the error
+    if (error.response) {
+      console.error('API error response:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      });
+    } else if (error.request) {
+      console.error('No response received from API');
+    } else {
+      console.error('Error setting up request:', error.message);
+    }
+    
+    return { professionals: [] };
   }
 };
 
 // Get a professional by ID
 export const getProfessionalById = async (id) => {
   try {
-    // Import userService to access our seeded test users
-    const userService = require('./userService').default;
+    const response = await axios.get(`${API_URL}/professionals/${id}`);
     
-    // Get all test professional users
-    const testProfessionals = await userService.getProfessionals();
-    
-    // Find the professional with matching ID
-    const professional = testProfessionals.find(p => p._id === id);
-    
-    if (!professional) {
-      throw new Error(`Professional with ID ${id} not found`);
+    if (response.data && response.data.success) {
+      return response.data.data;
     }
     
-    // Map the test user to match the expected format
-    return { 
-      professional: {
-        id: professional._id,
-        firstName: professional.firstName,
-        lastName: professional.lastName,
-        email: professional.email,
-        title: professional.profile?.title || 'Professional',
-        company: professional.profile?.company || 'Company',
-        industry: professional.profile?.industry || 'Technology',
-        yearsOfExperience: professional.profile?.yearsOfExperience || 5,
-        location: professional.profile?.location || 'Remote',
-        skills: professional.profile?.skills || ['Mentoring', 'Career Advice'],
-        bio: professional.profile?.bio || 'Experienced professional ready to help.',
-        profilePicture: generateAvatar(professional._id, professional.firstName, professional.lastName),
-        availability: [
-          { day: 'Monday', timeSlots: ['10:00 AM', '2:00 PM'] },
-          { day: 'Wednesday', timeSlots: ['11:00 AM', '4:00 PM'] },
-        ],
-        expertise: professional.profile?.expertise || ['Career Development', 'Mentorship'],
-        rating: 4.8,
-        reviewCount: Math.floor(Math.random() * 30) + 5
-      }
-    };
+    throw new Error(`Professional with ID ${id} not found`);
   } catch (error) {
     console.error('Error fetching professional by ID:', error);
     throw error;
@@ -332,46 +78,78 @@ export const getProfessionalById = async (id) => {
 };
 
 // Request a match with a professional
-export const requestMatch = async (professionalId, userData) => {
+export const requestMatch = async (professionalId) => {
   try {
-    // In a real app, we'd make an API call
-    // const response = await axios.post(`${API_URL}/matches/request`, {
-    //   professionalId,
-    //   ...userData
-    // });
-    // return response.data;
+    const token = localStorage.getItem('token');
     
-    // For now, we'll simulate a successful request
-    return {
-      status: 'success',
-      message: 'Match request sent successfully',
-      matchId: `match_${Date.now()}`,
-      professional: dummyProfessionals.find(p => p.id === professionalId)
-    };
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+    
+    const response = await axios.post(`${API_URL}/matches/request`, {
+      professionalId
+    }, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    return response.data;
   } catch (error) {
+    console.error('Error requesting match:', error);
     throw error;
   }
 };
 
-// Get all matches for the current user
+// Get user matches
 export const getUserMatches = async () => {
   try {
-    // In a real app, we'd make an API call with the user's token
-    // const response = await axios.get(`${API_URL}/matches/user`);
-    // return response.data;
+    // Get auth token using our helper
+    const token = getAuthToken();
     
-    // For now, we'll return dummy data
-    // Assume we have matched with some of the professionals
-    const matchedProfessionals = dummyProfessionals.slice(0, 3).map(prof => ({
-      id: `match_${prof.id}`,
-      professional: prof,
-      status: Math.random() > 0.5 ? 'pending' : 'accepted',
-      requestedAt: new Date(Date.now() - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)).toISOString(),
-      messages: []
-    }));
+    if (!token) {
+      console.error('No authentication token found in localStorage');
+      console.log('Auth state check: Token missing, localStorage contents:', {
+        isLoggedIn: localStorage.getItem('isLoggedIn'),
+        hasUserData: !!localStorage.getItem('userData'),
+        hasUserId: !!localStorage.getItem('userId')
+      });
+      throw new Error('No authentication token found');
+    }
     
-    return { matches: matchedProfessionals };
+    // Log token details for debugging
+    console.log('Using token for request:', token.substring(0, 10) + '...');
+    
+    // Log the API_URL value to check what's actually being used
+    console.log('API_URL value:', API_URL);
+    
+    // Make sure we're using the correct API URL format
+    const baseUrl = API_URL.includes('/api') ? API_URL : `${API_URL}/api`;
+    
+    // Make the API call with the existing token
+    const fullUrl = `${baseUrl}/matches`.replace(/\/+/g, '/').replace(':/', '://');
+    console.log(`Making API request to: ${fullUrl}`);
+    
+    const response = await axios.get(fullUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (response.data && response.data.success) {
+      return response.data.data;
+    }
+    
+    // If no matches data is returned, return empty array
+    return { matches: [] };
   } catch (error) {
+    console.error('Error fetching matches:', error);
+    
+    // If there's an auth error, throw it so the component can handle it
+    if (error.response && error.response.status === 401) {
+      throw new Error('Authentication required');
+    }
+    
     throw error;
   }
 };
@@ -379,52 +157,25 @@ export const getUserMatches = async () => {
 // Get all messages for the current user
 export const getUserMessages = async () => {
   try {
-    // In a real app, we'd make an API call with the user's token
-    // const response = await axios.get(`${API_URL}/messages`);
-    // return response.data;
+    const token = localStorage.getItem('token');
     
-    // For now, we'll create dummy messages from matched professionals
-    const dummyMessages = [];
+    if (!token) {
+      throw new Error('Authentication required');
+    }
     
-    // Generate dummy conversations with professionals
-    dummyProfessionals.slice(0, 5).forEach(prof => {
-      // Create a conversation thread
-      const threadId = `thread_${prof.id}`;
-      const messageCount = Math.floor(Math.random() * 5) + 1; // 1-5 messages
-      
-      // Generate messages in this thread
-      for (let i = 0; i < messageCount; i++) {
-        const isFromUser = Math.random() > 0.5;
-        const createdAt = new Date(Date.now() - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000));
-        
-        // Push simulated message
-        dummyMessages.push({
-          id: `msg_${prof.id}_${i}`,
-          threadId,
-          professional: {
-            id: prof.id,
-            firstName: prof.firstName,
-            lastName: prof.lastName,
-            title: prof.title,
-            company: prof.company,
-            profilePicture: prof.profilePicture
-          },
-          content: isFromUser 
-            ? getSampleUserMessage() 
-            : getSampleProfessionalMessage(),
-          sentBy: isFromUser ? 'user' : 'professional',
-          isRead: isFromUser ? true : Math.random() > 0.3, // 70% chance professional messages are read
-          createdAt: createdAt.toISOString(),
-          messageType: 'text', // Add message type to distinguish between text messages and special messages
-        });
+    const response = await axios.get(`${API_URL}/messages`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
       }
     });
     
-    // Sort messages by date (newest first)
-    dummyMessages.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    if (response.data && response.data.success) {
+      return response.data.data;
+    }
     
-    return { messages: dummyMessages };
+    return { messages: [] };
   } catch (error) {
+    console.error('Error fetching messages:', error);
     throw error;
   }
 };
@@ -432,40 +183,26 @@ export const getUserMessages = async () => {
 // Send a message to a professional
 export const sendMessage = async (professionalId, content, messageType = 'text', metadata = null) => {
   try {
-    // In a real app, we'd make an API call
-    // const response = await axios.post(`${API_URL}/messages`, {
-    //   professionalId,
-    //   content,
-    //   messageType,
-    //   metadata
-    // });
-    // return response.data;
+    const token = localStorage.getItem('token');
     
-    // For now, simulate success
-    const professional = dummyProfessionals.find(p => p.id === professionalId);
+    if (!token) {
+      throw new Error('Authentication required');
+    }
     
-    return { 
-      status: 'success',
-      message: {
-        id: `msg_${Date.now()}`,
-        threadId: `thread_${professionalId}`,
-        professional: {
-          id: professional.id,
-          firstName: professional.firstName,
-          lastName: professional.lastName,
-          title: professional.title,
-          company: professional.company,
-          profilePicture: professional.profilePicture
-        },
+    const response = await axios.post(`${API_URL}/messages`, {
+      professionalId,
         content,
         messageType,
-        metadata,
-        sentBy: 'user',
-        isRead: true,
-        createdAt: new Date().toISOString()
+      metadata
+    }, {
+      headers: {
+        'Authorization': `Bearer ${token}`
       }
-    };
+    });
+    
+    return response.data;
   } catch (error) {
+    console.error('Error sending message:', error);
     throw error;
   }
 };
@@ -483,6 +220,7 @@ export const sendCoffeeChatInvite = async (professionalId, message) => {
       }
     );
   } catch (error) {
+    console.error('Error sending coffee chat invitation:', error);
     throw error;
   }
 };
@@ -490,7 +228,6 @@ export const sendCoffeeChatInvite = async (professionalId, message) => {
 // Professional proposes time slots
 export const proposeTimeSlots = async (threadId, inviteId, timeSlots, message) => {
   try {
-    // Get professional ID from thread ID
     const professionalId = threadId.replace('thread_', '');
     
     return await sendMessage(
@@ -504,6 +241,7 @@ export const proposeTimeSlots = async (threadId, inviteId, timeSlots, message) =
       }
     );
   } catch (error) {
+    console.error('Error proposing time slots:', error);
     throw error;
   }
 };
@@ -511,7 +249,6 @@ export const proposeTimeSlots = async (threadId, inviteId, timeSlots, message) =
 // Seeker suggests alternative time slots
 export const suggestAlternativeTimeSlots = async (threadId, inviteId, timeSlots, message) => {
   try {
-    // Get professional ID from thread ID
     const professionalId = threadId.replace('thread_', '');
     
     return await sendMessage(
@@ -525,6 +262,7 @@ export const suggestAlternativeTimeSlots = async (threadId, inviteId, timeSlots,
       }
     );
   } catch (error) {
+    console.error('Error suggesting alternative time slots:', error);
     throw error;
   }
 };
@@ -532,7 +270,6 @@ export const suggestAlternativeTimeSlots = async (threadId, inviteId, timeSlots,
 // Professional confirms time slot
 export const confirmTimeSlot = async (threadId, inviteId, selectedTimeSlot, message) => {
   try {
-    // Get professional ID from thread ID
     const professionalId = threadId.replace('thread_', '');
     
     return await sendMessage(
@@ -546,6 +283,7 @@ export const confirmTimeSlot = async (threadId, inviteId, selectedTimeSlot, mess
       }
     );
   } catch (error) {
+    console.error('Error confirming time slot:', error);
     throw error;
   }
 };
@@ -553,40 +291,34 @@ export const confirmTimeSlot = async (threadId, inviteId, selectedTimeSlot, mess
 // Seeker confirms and proceeds to payment
 export const confirmAndPay = async (threadId, inviteId, selectedTimeSlot, paymentDetails) => {
   try {
-    // Get professional ID from thread ID
-    const professionalId = threadId.replace('thread_', '');
+    const token = localStorage.getItem('token');
     
-    // In a real app, we would process payment here
-    // const paymentResponse = await axios.post(`${API_URL}/payments`, {
-    //   professionalId,
-    //   inviteId,
-    //   selectedTimeSlot,
-    //   ...paymentDetails
-    // });
+    if (!token) {
+      throw new Error('Authentication required');
+    }
     
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // If payment is successful, send confirmation message
-    return await sendMessage(
-      professionalId,
-      "I've confirmed and completed payment for our coffee chat!",
-      'payment_confirmation',
-      {
+    const response = await axios.post(`${API_URL}/payments`, {
+      threadId,
         inviteId,
         selectedTimeSlot,
-        paymentId: `payment_${Date.now()}`,
-        paymentStatus: 'completed',
-        status: 'booked'
+      ...paymentDetails
+    }, {
+      headers: {
+        'Authorization': `Bearer ${token}`
       }
-    );
+    });
+    
+    return response.data;
   } catch (error) {
+    console.error('Error processing payment:', error);
     throw error;
   }
 };
 
 // Helper function to format time slot
 function formatTimeSlot(timeSlot) {
+  if (!timeSlot || !timeSlot.date) return 'Invalid time slot';
+  
   const date = new Date(timeSlot.date);
   const formattedDate = date.toLocaleDateString('en-US', { 
     weekday: 'long', 
@@ -596,39 +328,4 @@ function formatTimeSlot(timeSlot) {
   });
   
   return `${formattedDate} at ${timeSlot.time}`;
-}
-
-// Helper functions to generate realistic message content
-function getSampleUserMessage() {
-  const userMessages = [
-    "Thanks for accepting my match request! I'm interested in learning more about your experience in the industry.",
-    "I'd love to schedule a coffee chat to discuss career opportunities in your field.",
-    "Do you have any advice for someone looking to transition into your area of expertise?",
-    "I saw your background in product development. Could you share some insights about how you approach problem-solving?",
-    "Thank you for the advice you shared in our last conversation. It was really helpful!",
-    "I'm preparing for an interview next week. Any tips on how to stand out?",
-    "Would it be possible to schedule a 30-minute call sometime this week?",
-    "I've been researching the companies you've worked with. What was your favorite project?",
-    "The resources you recommended were excellent. I've already started going through them.",
-    "Just following up on our conversation from last week. Let me know when you're available to chat!"
-  ];
-  
-  return userMessages[Math.floor(Math.random() * userMessages.length)];
-}
-
-function getSampleProfessionalMessage() {
-  const professionalMessages = [
-    "Happy to connect! I'd be glad to share my insights about the industry with you.",
-    "Thanks for reaching out. I think my experience in this field could be valuable for your career journey.",
-    "I'd be happy to schedule a coffee chat. How does next Tuesday at 3 PM sound?",
-    "Based on what you've shared, I think focusing on developing these specific skills would be most beneficial for you.",
-    "Great question! In my experience, the most successful approach has been to...",
-    "I've attached some resources that I think will help you prepare for your interview.",
-    "Let's definitely set up a call. My availability this week is Tuesday 2-4pm or Thursday 9-11am.",
-    "From your background, I see a lot of potential for growth in this area. Let me explain why...",
-    "Don't hesitate to reach out if you have more questions after reviewing the materials I sent.",
-    "It was great chatting with you. I've made a note to connect you with my colleague who specializes in that area."
-  ];
-  
-  return professionalMessages[Math.floor(Math.random() * professionalMessages.length)];
 } 

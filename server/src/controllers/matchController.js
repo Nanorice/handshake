@@ -14,21 +14,27 @@ const sendMatchRequest = async (req, res) => {
     // Validate input
     if (!professionalId) {
       return res.status(400).json({
-        status: 'error',
-        message: 'Professional ID is required'
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Professional ID is required'
+        }
       });
     }
     
     // Check if professional exists
     const professional = await User.findOne({
       _id: professionalId,
-      userType: 'professional'
+      $or: [{ role: 'professional' }, { userType: 'professional' }]
     });
     
     if (!professional) {
       return res.status(404).json({
-        status: 'error',
-        message: 'Professional not found'
+        success: false,
+        error: {
+          code: 'RESOURCE_NOT_FOUND',
+          message: 'Professional not found'
+        }
       });
     }
     
@@ -40,8 +46,11 @@ const sendMatchRequest = async (req, res) => {
     
     if (existingMatch) {
       return res.status(400).json({
-        status: 'error',
-        message: 'Match request already exists',
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Match request already exists'
+        },
         data: {
           match: existingMatch
         }
@@ -58,18 +67,20 @@ const sendMatchRequest = async (req, res) => {
     await newMatch.save();
     
     res.status(201).json({
-      status: 'success',
-      message: 'Match request sent successfully',
+      success: true,
       data: {
         match: newMatch
-      }
+      },
+      message: 'Match request sent successfully'
     });
   } catch (error) {
     console.error('Error sending match request:', error);
     res.status(500).json({
-      status: 'error',
-      message: 'An error occurred while sending match request',
-      error: error.message
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while sending match request'
+      }
     });
   }
 };
@@ -88,24 +99,33 @@ const acceptMatchRequest = async (req, res) => {
     
     if (!match) {
       return res.status(404).json({
-        status: 'error',
-        message: 'Match request not found'
+        success: false,
+        error: {
+          code: 'RESOURCE_NOT_FOUND',
+          message: 'Match request not found'
+        }
       });
     }
     
     // Verify this professional is the recipient of the request
     if (match.professional.toString() !== professionalId.toString()) {
       return res.status(403).json({
-        status: 'error',
-        message: 'You do not have permission to accept this match request'
+        success: false,
+        error: {
+          code: 'PERMISSION_DENIED',
+          message: 'You do not have permission to accept this match request'
+        }
       });
     }
     
     // Check if already accepted
     if (match.status === 'accepted') {
       return res.status(400).json({
-        status: 'error',
-        message: 'Match request already accepted'
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Match request already accepted'
+        }
       });
     }
     
@@ -115,18 +135,20 @@ const acceptMatchRequest = async (req, res) => {
     await match.save();
     
     res.status(200).json({
-      status: 'success',
-      message: 'Match request accepted',
+      success: true,
       data: {
         match
-      }
+      },
+      message: 'Match request accepted'
     });
   } catch (error) {
     console.error('Error accepting match request:', error);
     res.status(500).json({
-      status: 'error',
-      message: 'An error occurred while accepting match request',
-      error: error.message
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while accepting match request'
+      }
     });
   }
 };
@@ -145,16 +167,22 @@ const rejectMatchRequest = async (req, res) => {
     
     if (!match) {
       return res.status(404).json({
-        status: 'error',
-        message: 'Match request not found'
+        success: false,
+        error: {
+          code: 'RESOURCE_NOT_FOUND',
+          message: 'Match request not found'
+        }
       });
     }
     
     // Verify this professional is the recipient of the request
     if (match.professional.toString() !== professionalId.toString()) {
       return res.status(403).json({
-        status: 'error',
-        message: 'You do not have permission to reject this match request'
+        success: false,
+        error: {
+          code: 'PERMISSION_DENIED',
+          message: 'You do not have permission to reject this match request'
+        }
       });
     }
     
@@ -164,18 +192,20 @@ const rejectMatchRequest = async (req, res) => {
     await match.save();
     
     res.status(200).json({
-      status: 'success',
-      message: 'Match request rejected',
+      success: true,
       data: {
         match
-      }
+      },
+      message: 'Match request rejected'
     });
   } catch (error) {
     console.error('Error rejecting match request:', error);
     res.status(500).json({
-      status: 'error',
-      message: 'An error occurred while rejecting match request',
-      error: error.message
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while rejecting match request'
+      }
     });
   }
 };
@@ -187,12 +217,36 @@ const rejectMatchRequest = async (req, res) => {
 const getUserMatches = async (req, res) => {
   try {
     const userId = req.user._id;
-    const userType = req.user.userType;
+    // Check both role and userType to handle different field names
+    const userRole = req.user.role || req.user.userType;
     
-    // Build query based on user type
-    const query = userType === 'seeker' 
-      ? { seeker: userId } 
-      : { professional: userId };
+    // Verify user is authenticated
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'Authentication required'
+        }
+      });
+    }
+    
+    // Build query based on user role
+    let query;
+    if (userRole === 'seeker') {
+      query = { seeker: userId };
+    } else if (userRole === 'professional') {
+      query = { professional: userId };
+    } else {
+      // If role is undefined or not recognized
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid user role'
+        }
+      });
+    }
     
     // Apply status filter if provided
     if (req.query.status) {
@@ -201,12 +255,12 @@ const getUserMatches = async (req, res) => {
     
     // Find matches
     const matches = await Match.find(query)
-      .populate('seeker', 'firstName lastName email profile.profilePicture')
-      .populate('professional', 'firstName lastName email profile')
+      .populate('seeker', 'name profileImage')
+      .populate('professional', 'name profileImage')
       .sort({ createdAt: -1 });
     
     res.status(200).json({
-      status: 'success',
+      success: true,
       data: {
         matches
       }
@@ -214,9 +268,11 @@ const getUserMatches = async (req, res) => {
   } catch (error) {
     console.error('Error fetching matches:', error);
     res.status(500).json({
-      status: 'error',
-      message: 'An error occurred while fetching matches',
-      error: error.message
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while fetching matches'
+      }
     });
   }
 };
@@ -232,13 +288,16 @@ const getMatchById = async (req, res) => {
     
     // Find match
     const match = await Match.findById(id)
-      .populate('seeker', 'firstName lastName email profile.profilePicture')
-      .populate('professional', 'firstName lastName email profile');
+      .populate('seeker', 'name profileImage')
+      .populate('professional', 'name profileImage');
     
     if (!match) {
       return res.status(404).json({
-        status: 'error',
-        message: 'Match not found'
+        success: false,
+        error: {
+          code: 'RESOURCE_NOT_FOUND',
+          message: 'Match not found'
+        }
       });
     }
     
@@ -249,13 +308,16 @@ const getMatchById = async (req, res) => {
     
     if (!isUserInvolved) {
       return res.status(403).json({
-        status: 'error',
-        message: 'You do not have permission to view this match'
+        success: false,
+        error: {
+          code: 'PERMISSION_DENIED',
+          message: 'You do not have permission to view this match'
+        }
       });
     }
     
     res.status(200).json({
-      status: 'success',
+      success: true,
       data: {
         match
       }
@@ -263,11 +325,25 @@ const getMatchById = async (req, res) => {
   } catch (error) {
     console.error('Error fetching match:', error);
     res.status(500).json({
-      status: 'error',
-      message: 'An error occurred while fetching match',
-      error: error.message
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while fetching match'
+      }
     });
   }
+};
+
+/**
+ * Simple test endpoint to verify the matches API is working
+ * @route GET /api/matches/test
+ */
+const testMatchesApi = async (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Matches API is working!',
+    timestamp: new Date().toISOString()
+  });
 };
 
 module.exports = {
@@ -275,5 +351,6 @@ module.exports = {
   acceptMatchRequest,
   rejectMatchRequest,
   getUserMatches,
-  getMatchById
+  getMatchById,
+  testMatchesApi
 }; 

@@ -14,59 +14,40 @@ const userSchema = new mongoose.Schema({
     required: true,
     minlength: 8,
   },
-  userType: {
+  role: {
     type: String,
-    enum: ['professional', 'seeker'],
+    enum: ['seeker', 'professional'],
     required: true,
     default: 'seeker'
   },
-  firstName: {
+  name: {
     type: String,
     required: true,
     trim: true,
   },
-  lastName: {
+  bio: {
     type: String,
-    required: true,
     trim: true,
   },
-  profile: {
-    bio: String,
-    industry: String,
-    company: String,
-    position: String,
-    location: String,
-    availability: [{
-      day: String,
-      timeSlots: [String]
-    }],
-    interests: [String],
-    profilePicture: String,
-    linkedinUrl: String,
-    website: String
+  resumeUrl: {
+    type: String,
+    trim: true,
   },
-  preferences: {
-    meetingType: {
-      type: String,
-      enum: ['virtual', 'in-person', 'both'],
-      default: 'both'
-    },
-    maxDistance: Number,
-    preferredIndustries: [String]
+  linkedinUrl: {
+    type: String,
+    trim: true,
+  },
+  profileImage: {
+    type: String,
+    trim: true,
   },
   status: {
     type: String,
     enum: ['active', 'inactive', 'suspended'],
     default: 'active'
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
+}, {
+  timestamps: true // Automatically add createdAt and updatedAt fields
 });
 
 // Hash password before saving
@@ -80,12 +61,6 @@ userSchema.pre('save', async function(next) {
   } catch (error) {
     next(error);
   }
-});
-
-// Update the updatedAt field before saving
-userSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
 });
 
 // Method to compare password

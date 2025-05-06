@@ -1,33 +1,142 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme, useMediaQuery } from '@mui/material';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+
+// Import components
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
-import Matches from './pages/Matches';
+import LoginForm from './components/Auth/LoginForm';
+import RegisterForm from './components/Auth/RegisterForm';
+import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
+import Messaging from './pages/Messaging';
+import ProfessionalDiscovery from './pages/ProfessionalDiscovery';
+import Matches from './pages/Matches';
 import CoffeeChats from './pages/CoffeeChats';
 import RegisterProfessional from './pages/RegisterProfessional';
 import RegisterSeeker from './pages/RegisterSeeker';
-import LoginForm from './components/Auth/LoginForm';
-import RegisterForm from './components/Auth/RegisterForm';
+import MessageNotifications from './components/Messaging/MessageNotifications';
 import AdminDashboard from './pages/AdminDashboard';
-import ProfessionalDiscovery from './pages/ProfessionalDiscovery';
-import Dashboard from './pages/Dashboard';
-import Messaging from './pages/Messaging';
 import MessagingTest from './pages/MessagingTest';
 import SimpleChat from './pages/SimpleChat';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeContext } from './contexts/ThemeContext';
-import { getCurrentUserId, isAuthenticated } from './utils/authUtils';
+import { getCurrentUserId } from './utils/authUtils';
 import socketService from './services/socketService';
-import MessageNotifications from './components/Messaging/MessageNotifications';
+
+// Helper function for direct auth check
+function checkDirectAuth() {
+  const token = localStorage.getItem('token');
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+  return !!token || isLoggedIn;
+}
+
+// AppRoutes component that has access to AuthContext
+function AppRoutes() {
+  const [notifications, setNotifications] = useState([]);
+  const { isAuthenticated, refreshAuthState } = useAuth();
+  
+  // Ensure auth state is synchronized
+  useEffect(() => {
+    const directAuth = checkDirectAuth();
+    if (directAuth !== isAuthenticated) {
+      console.log('Auth state mismatch detected in AppRoutes, refreshing context');
+      refreshAuthState();
+    }
+  }, [isAuthenticated, refreshAuthState]);
+
+  // Listen for message notifications
+  useEffect(() => {
+    if (checkDirectAuth()) {
+      const token = localStorage.getItem('token');
+      if (token) {
+        // Initialize socket connection
+        socketService.connect(token);
+        
+        // Set up listener for message notifications
+        socketService.onMessageNotification((data) => {
+          const { message, thread } = data;
+          
+          // Skip notifications for the current user's messages
+          if (message.sender._id === getCurrentUserId()) {
+            return;
+          }
+          
+          // Create a notification
+          const notification = {
+            id: Date.now().toString(),
+            threadId: thread._id,
+            senderName: `${message.sender.firstName} ${message.sender.lastName}`,
+            senderAvatar: message.sender.profilePicture || null,
+            preview: message.content || '',
+            hasAttachments: message.attachments && message.attachments.length > 0
+          };
+          
+          setNotifications(prev => [notification, ...prev].slice(0, 5)); // Keep last 5
+        });
+      }
+    }
+    
+    return () => {
+      // Clean up
+      socketService.removeListener('message-notification');
+    };
+  }, []);
+
+  // Handle notification dismiss
+  const handleDismissNotification = (id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+  
+  // Handle navigation to a thread
+  const handleNavigateToThread = (threadId) => {
+    // This gets handled by the component
+  };
+
+  return (
+    <>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={!checkDirectAuth() ? <Home /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/login" element={!checkDirectAuth() ? <LoginForm /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/register" element={!checkDirectAuth() ? <RegisterForm /> : <Navigate to="/dashboard" replace />} />
+        
+        {/* Protected routes */}
+        <Route path="/dashboard" element={checkDirectAuth() ? <><Navbar /><Dashboard /></> : <Navigate to="/login" state={{ from: '/dashboard' }} replace />} />
+        <Route path="/profile" element={checkDirectAuth() ? <><Navbar /><Profile /></> : <Navigate to="/login" replace />} />
+        <Route path="/profile-setup" element={checkDirectAuth() ? <><Navbar /><Profile /></> : <Navigate to="/login" replace />} />
+        <Route path="/messaging" element={checkDirectAuth() ? <><Navbar /><Messaging /></> : <Navigate to="/login" replace />} />
+        <Route path="/search" element={checkDirectAuth() ? <><Navbar /><ProfessionalDiscovery /></> : <Navigate to="/login" replace />} />
+        <Route path="/matches" element={checkDirectAuth() ? <><Navbar /><Matches /></> : <Navigate to="/login" replace />} />
+        <Route path="/coffee-chats" element={checkDirectAuth() ? <><Navbar /><CoffeeChats /></> : <Navigate to="/login" replace />} />
+        <Route path="/professionals" element={checkDirectAuth() ? <><Navbar /><ProfessionalDiscovery /></> : <Navigate to="/login" replace />} />
+        <Route path="/register/professional" element={checkDirectAuth() ? <><Navbar /><RegisterProfessional /></> : <Navigate to="/login" replace />} />
+        <Route path="/register/seeker" element={checkDirectAuth() ? <><Navbar /><RegisterSeeker /></> : <Navigate to="/login" replace />} />
+        <Route path="/test" element={checkDirectAuth() ? <><Navbar /><MessagingTest /></> : <Navigate to="/login" replace />} />
+        <Route path="/simple-chat" element={checkDirectAuth() ? <><Navbar /><SimpleChat /></> : <Navigate to="/login" replace />} />
+        <Route path="/admin" element={checkDirectAuth() ? <><Navbar /><AdminDashboard /></> : <Navigate to="/login" replace />} />
+        
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      
+      {/* Message Notifications */}
+      {checkDirectAuth() && (
+        <MessageNotifications 
+          notifications={notifications} 
+          onDismiss={handleDismissNotification}
+          onNavigate={handleNavigateToThread}
+        />
+      )}
+    </>
+  );
+}
 
 function App() {
   const [darkMode, setDarkMode] = useState(localStorage.getItem('darkMode') === 'true');
-  const [notifications, setNotifications] = useState([]);
 
   // Create theme based on dark mode preference
   const theme = createTheme({
@@ -128,54 +237,6 @@ function App() {
     localStorage.setItem('darkMode', newMode);
   };
 
-  // Listen for message notifications
-  useEffect(() => {
-    if (isAuthenticated()) {
-      const token = localStorage.getItem('token');
-      if (token) {
-        // Initialize socket connection
-        socketService.connect(token);
-        
-        // Set up listener for message notifications
-        socketService.onMessageNotification((data) => {
-          const { message, thread } = data;
-          
-          // Skip notifications for the current user's messages
-          if (message.sender._id === getCurrentUserId()) {
-            return;
-          }
-          
-          // Create a notification
-          const notification = {
-            id: Date.now().toString(),
-            threadId: thread._id,
-            senderName: `${message.sender.firstName} ${message.sender.lastName}`,
-            senderAvatar: message.sender.profilePicture || null,
-            preview: message.content || '',
-            hasAttachments: message.attachments && message.attachments.length > 0
-          };
-          
-          setNotifications(prev => [notification, ...prev].slice(0, 5)); // Keep last 5
-        });
-      }
-    }
-    
-    return () => {
-      // Clean up
-      socketService.removeListener('message-notification');
-    };
-  }, []);
-
-  // Handle notification dismiss
-  const handleDismissNotification = (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-  
-  // Handle navigation to a thread
-  const handleNavigateToThread = (threadId) => {
-    // This gets handled by the component
-  };
-
   return (
     <ThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
       <ThemeProvider theme={theme}>
@@ -183,47 +244,7 @@ function App() {
         <LocalizationProvider dateAdapter={AdapterDateFns}>
           <AuthProvider>
             <Router>
-              {isAuthenticated() && <Navbar />}
-              <Routes>
-                {/* Public routes */}
-                <Route path="/" element={!isAuthenticated() ? <Home /> : <Navigate to="/dashboard" />} />
-                <Route path="/login" element={!isAuthenticated() ? <LoginForm /> : <Navigate to="/dashboard" />} />
-                <Route path="/register" element={!isAuthenticated() ? <RegisterForm /> : <Navigate to="/dashboard" />} />
-                
-                {/* Protected routes - modified to ensure dashboard accessibility */}
-                <Route 
-                  path="/dashboard" 
-                  element={
-                    localStorage.getItem('token') || localStorage.getItem('isLoggedIn') === 'true' ? 
-                    <Dashboard /> : 
-                    <Navigate to="/login" state={{ from: '/dashboard' }} />
-                  } 
-                />
-                <Route path="/profile" element={isAuthenticated() ? <Profile /> : <Navigate to="/login" />} />
-                <Route path="/profile-setup" element={isAuthenticated() ? <Profile /> : <Navigate to="/login" />} />
-                <Route path="/messaging" element={isAuthenticated() ? <Messaging /> : <Navigate to="/login" />} />
-                <Route path="/search" element={isAuthenticated() ? <ProfessionalDiscovery /> : <Navigate to="/login" />} />
-                <Route path="/matches" element={isAuthenticated() ? <Matches /> : <Navigate to="/login" />} />
-                <Route path="/coffee-chats" element={isAuthenticated() ? <CoffeeChats /> : <Navigate to="/login" />} />
-                <Route path="/professionals" element={isAuthenticated() ? <ProfessionalDiscovery /> : <Navigate to="/login" />} />
-                <Route path="/register/professional" element={isAuthenticated() ? <RegisterProfessional /> : <Navigate to="/login" />} />
-                <Route path="/register/seeker" element={isAuthenticated() ? <RegisterSeeker /> : <Navigate to="/login" />} />
-                <Route path="/test" element={isAuthenticated() ? <MessagingTest /> : <Navigate to="/login" />} />
-                <Route path="/simple-chat" element={isAuthenticated() ? <SimpleChat /> : <Navigate to="/login" />} />
-                <Route path="/admin" element={isAuthenticated() ? <AdminDashboard /> : <Navigate to="/login" />} />
-                
-                {/* Fallback */}
-                <Route path="*" element={<Navigate to="/" />} />
-              </Routes>
-              
-              {/* Message Notifications */}
-              {isAuthenticated() && (
-                <MessageNotifications 
-                  notifications={notifications} 
-                  onDismiss={handleDismissNotification}
-                  onNavigate={handleNavigateToThread}
-                />
-              )}
+              <AppRoutes />
             </Router>
           </AuthProvider>
         </LocalizationProvider>

@@ -44,6 +44,7 @@ import {
   Cancel as CancelIcon
 } from '@mui/icons-material';
 import { getUserMatches } from '../services/professionalService';
+import { debugAuthState } from '../utils/authUtils';
 
 const Matches = () => {
   const navigate = useNavigate();
@@ -64,33 +65,100 @@ const Matches = () => {
   });
 
   useEffect(() => {
-    // Check authentication
-    const token = localStorage.getItem('token');
-    if (!token) {
+    // Debug authentication state when component mounts
+    console.log('Matches page - mounting and checking auth...');
+    const authState = debugAuthState();
+    console.log('Auth state in Matches page:', authState);
+    
+    // Check if user is coming from a protected route redirect
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get('authError');
+    
+    if (authError) {
       setSnackbar({
         open: true,
         message: 'Please log in to view your matches',
         severity: 'warning'
       });
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
-      return;
     }
     
-    loadMatches();
+    // Wait a brief moment before loading matches to ensure auth is properly initialized
+    setTimeout(() => {
+      // Load matches (authentication will be checked in the loadMatches function)
+      loadMatches();
+    }, 100);
   }, [navigate]);
 
   const loadMatches = async () => {
     try {
       setLoading(true);
+      setError(null); // Clear any previous errors
+      
+      // Verify token exists
+      const authState = debugAuthState();
+      console.log('Auth state before loading matches:', authState);
+      
+      if (!authState.isAuthenticated) {
+        console.error('User is not authenticated');
+        setError('Please log in to view your matches');
+        throw new Error('Authentication required');
+      }
+      
+      console.log('Fetching matches from API...');
       const data = await getUserMatches();
-      setMatches(data.matches);
-      setError(null);
+      console.log('Matches API response:', data);
+      
+      // Check if data exists and has matches property
+      if (data && data.matches) {
+        setMatches(data.matches);
+      } else {
+        // If no matches data, set empty array
+        setMatches([]);
+      }
+      
+      // Clear any warning messages since we successfully loaded matches
+      if (snackbar.message === 'Please log in to view your matches') {
+        setSnackbar({...snackbar, open: false});
+      }
+      
     } catch (error) {
       console.error('Error loading matches:', error);
-      setError('Failed to load your matches. Please try again later.');
-      setMatches([]);
+      
+      // Handle authentication errors
+      if (error.message === 'Authentication required' || 
+          (error.response && error.response.status === 401)) {
+        setError('Please log in to view your matches');
+        setSnackbar({
+          open: true,
+          message: 'Please log in to view your matches',
+          severity: 'warning'
+        });
+        
+        // Redirect to login after a short delay
+        setTimeout(() => {
+          navigate('/login', { state: { returnUrl: '/matches' } });
+        }, 2000);
+      } 
+      // Handle 404 errors (API endpoint not found)
+      else if (error.response && error.response.status === 404) {
+        console.log('API endpoint not found');
+        setError('This feature is not yet available. The API endpoint does not exist.');
+        setSnackbar({
+          open: true,
+          message: 'API endpoint not available',
+          severity: 'error'
+        });
+        setMatches([]);
+      }
+      else {
+        setError('Failed to load your matches. Please try again later.');
+        setSnackbar({
+          open: true,
+          message: 'Error loading matches. Please try again.',
+          severity: 'error'
+        });
+        setMatches([]);
+      }
     } finally {
       setLoading(false);
     }

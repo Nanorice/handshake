@@ -71,6 +71,21 @@ npm start
 - `/client` - React frontend
 - `/server` - Node.js backend
 
+## Documentation
+
+All project documentation is now centralized in the `project_documentation` folder:
+
+- **Product Requirements**: [project_documentation/handshake-product-requirements.md](./project_documentation/handshake-product-requirements.md)
+- **UI/UX Design**: [project_documentation/handshake-software-specifications.md](./project_documentation/handshake-software-specifications.md)
+- **Technical Architecture**: [project_documentation/handshake-ux-design.md](./project_documentation/handshake-ux-design.md)
+- **API Routes**: [project_documentation/API_ROUTES.md](./project_documentation/API_ROUTES.md)
+- **Database Schema**: [project_documentation/DATABASE_SCHEMA.md](./project_documentation/DATABASE_SCHEMA.md)
+
+For development conventions, please refer to:
+- [project-rules.md](./project-rules.md) - Coding standards and conventions
+- [folder-structure.md](./folder-structure.md) - Project folder organization
+- [design-system.md](./design-system.md) - UI component design system
+
 ## License
 
 This project is licensed under the MIT License. 

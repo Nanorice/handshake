@@ -1,22 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { 
-  getUsers,
+  getUserProfile,
+  updateUserProfile,
   getUserById,
-  searchUsers
+  getUserStats
 } = require('../controllers/userController');
 const { auth } = require('../middleware/auth');
 
-// All user routes require authentication
-router.use(auth);
-
-// Get all users (can filter by userType)
-router.get('/', getUsers);
-
-// Search users by name or email
-router.get('/search', searchUsers);
-
-// Get user by ID
-router.get('/:userId', getUserById);
+// Protected routes
+router.get('/me', auth, getUserProfile);
+router.get('/stats', auth, getUserStats);
+router.put('/profile', auth, updateUserProfile);
+router.get('/:id', auth, getUserById);
 
 module.exports = router; 

@@ -3,17 +3,17 @@ const router = express.Router();
 const { 
   getProfessionals, 
   getProfessionalById, 
-  updateProfile, 
-  getIndustries 
+  updateAvailability
 } = require('../controllers/professionalController');
 const { auth, authorize } = require('../middleware/auth');
 
 // Public routes
 router.get('/', getProfessionals);
-router.get('/industries', getIndustries);
-router.get('/:id', getProfessionalById);
 
-// Protected routes (require authentication)
-router.put('/profile', auth, authorize(['professional']), updateProfile);
+// Authenticated routes
+router.get('/:id', auth, getProfessionalById);
+
+// Professional-only routes
+router.post('/availability', auth, authorize(['professional']), updateAvailability);
 
 module.exports = router; 

@@ -1,97 +1,83 @@
+// Synchronous local storage wrapper to avoid race conditions
+const TokenStorage = {
+  getToken: () => localStorage.getItem('token'),
+  setToken: (token) => {
+    if (!token) return false;
+    try {
+      localStorage.setItem('token', token);
+      // Verify it was set correctly
+      return localStorage.getItem('token') === token;
+    } catch (e) {
+      console.error('Failed to set token:', e);
+      return false;
+    }
+  },
+  removeToken: () => localStorage.removeItem('token'),
+  debugToken: () => {
+    const token = localStorage.getItem('token');
+    console.log('Token debug:', {
+      exists: !!token,
+      preview: token ? `${token.substring(0, 10)}...` : 'none'  
+    });
+    return token;
+  }
+};
+
 // Get the JWT token from localStorage
 export const getAuthToken = () => {
-  return localStorage.getItem('token');
+  return TokenStorage.getToken();
 };
 
 // Set the JWT token in localStorage
 export const setAuthToken = (token) => {
-  localStorage.setItem('token', token);
+  return TokenStorage.setToken(token);
 };
 
 // Remove the JWT token from localStorage
 export const removeAuthToken = () => {
-  localStorage.removeItem('token');
+  TokenStorage.removeToken();
 };
 
 // Check if the user is authenticated
 export const isAuthenticated = () => {
-  const token = getAuthToken();
-  const isExplicitlyLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+  // Use TokenStorage to get token
+  const token = TokenStorage.getToken();
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
   
-  console.log('Authentication check:', {
-    hasToken: !!token,
-    isExplicitlyLoggedIn,
-    finalDecision: !!(token || isExplicitlyLoggedIn)
-  });
+  // For debugging
+  if (isLoggedIn && !token) {
+    console.warn('isAuthenticated found isLoggedIn=true but no token - inconsistent state');
+  }
   
-  // Return true if either token exists or explicit login flag is set
-  return !!(token || isExplicitlyLoggedIn);
+  // Token presence is the primary indicator of authentication
+  return !!token;
 };
 
 // Get the current user's ID
 export const getCurrentUserId = () => {
-  // First try to get from a dedicated userId field
-  const userId = localStorage.getItem('userId');
-  if (userId) return userId;
-  
-  // If not available, try to get from userData
-  try {
-    const userDataJson = localStorage.getItem('userData');
-    if (userDataJson) {
-      const userData = JSON.parse(userDataJson);
-      
-      // If userData has an _id field
-      if (userData._id) {
-        return userData._id;
-      }
-      
-      // If userData has an email field, try to extract ID from email
-      if (userData.email) {
-        // For test users, email is formatted like pro1@example.com or seeker5@example.com
-        if (userData.email.includes('@example.com')) {
-          const parts = userData.email.split('@');
-          return parts[0]; // Return 'pro1' or 'seeker5'
-        }
-      }
-      
-      // If userData has a userType, generate a fallback ID
-      if (userData.userType) {
-        return `${userData.userType}_user`;
-      }
-    }
-  } catch (error) {
-    console.error('Error parsing user data:', error);
-  }
-  
-  // If all else fails, return a placeholder ID
-  return 'current_user';
+  return localStorage.getItem('userId');
 };
 
 // Store user data in local storage
-export const setUserData = (userData) => {
-  console.log('Setting user data in localStorage:', userData);
+export const setUserData = (data) => {
+  if (!data) return;
+
+  const { user, token } = data;
   
-  try {
-    if (!userData || !userData._id) {
-      console.warn('Warning: Attempted to save invalid user data', userData);
-    }
-    
-    // Explicitly store userId for easier access
-    if (userData && userData._id) {
-      localStorage.setItem('userId', userData._id);
-      console.log('User ID saved:', userData._id);
-    }
-    
-    // Store the full userData object
-    localStorage.setItem('userData', JSON.stringify(userData));
-    console.log('User data successfully saved to localStorage');
-    
-    // Verify data was stored correctly
-    const savedData = localStorage.getItem('userData');
-    console.log('Verification - userData retrieved:', savedData ? 'success' : 'failed');
-  } catch (error) {
-    console.error('Error saving user data to localStorage:', error);
+  if (token) {
+    // Use our TokenStorage wrapper instead of direct localStorage access
+    const tokenSaved = TokenStorage.setToken(token);
+    console.log('Token saved to localStorage:', tokenSaved ? 'Success' : 'Failed');
   }
+  
+  if (user) {
+    localStorage.setItem('userData', JSON.stringify(user));
+    localStorage.setItem('userId', user._id);
+    console.log('User data saved to localStorage');
+  }
+  
+  // Set explicit login state
+  localStorage.setItem('isLoggedIn', 'true');
 };
 
 // Get user data from localStorage
@@ -119,17 +105,52 @@ export const isAdmin = () => {
 // Clear auth data (logout)
 export const clearAuth = () => {
   console.log('Clearing all auth data from localStorage');
-  localStorage.removeItem('token');
+  TokenStorage.removeToken();
   localStorage.removeItem('userData');
   localStorage.removeItem('userId');
   localStorage.removeItem('isAdmin');
+  localStorage.removeItem('isLoggedIn');
 };
 
 // Logout user
 export const logout = () => {
   console.log('Logging out user, clearing auth data');
-  localStorage.removeItem('token');
+  TokenStorage.removeToken();
   localStorage.removeItem('userData');
   localStorage.removeItem('userId');
   localStorage.removeItem('isAdmin');
+  localStorage.removeItem('isLoggedIn');
+};
+
+// Debug authentication state - can be called from any component
+export const debugAuthState = () => {
+  const token = localStorage.getItem('token');
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+  const userData = localStorage.getItem('userData');
+  const userId = localStorage.getItem('userId');
+  
+  const authState = {
+    isAuthenticated: !!token || isLoggedIn,
+    hasToken: !!token,
+    isExplicitlyLoggedIn: isLoggedIn,
+    hasUserData: !!userData,
+    hasUserId: !!userId
+  };
+  
+  console.log('Current auth state:', authState);
+  
+  if (token) {
+    // Log token type to help debug
+    const isJWT = token.startsWith('ey');
+    const isTemp = token.startsWith('temp_') || token.startsWith('mock_');
+    
+    console.log('Token analysis:', {
+      isJWT,
+      isTemp,
+      length: token.length,
+      preview: token.substring(0, 10) + '...'
+    });
+  }
+  
+  return authState;
 }; 

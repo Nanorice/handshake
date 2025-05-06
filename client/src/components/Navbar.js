@@ -25,12 +25,20 @@ import { ThemeContext } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import socketService from '../services/socketService';
 
+// Add direct check function similar to App.js
+const checkDirectAuth = () => {
+  const token = localStorage.getItem('token');
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+  return !!token || isLoggedIn;
+};
+
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
   const { darkMode, toggleDarkMode } = useContext(ThemeContext);
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, refreshAuthState } = useAuth();
+  const [directlyAuthenticated, setDirectlyAuthenticated] = useState(checkDirectAuth());
   const [anchorEl, setAnchorEl] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -38,6 +46,18 @@ const Navbar = () => {
     firstName: '',
     lastName: ''
   });
+
+  // Check direct auth status when route changes
+  useEffect(() => {
+    const currentAuthState = checkDirectAuth();
+    setDirectlyAuthenticated(currentAuthState);
+    
+    // If there's a mismatch between direct auth check and context state, refresh context
+    if (currentAuthState !== isAuthenticated) {
+      console.log('Auth state mismatch detected in Navbar, refreshing context');
+      refreshAuthState();
+    }
+  }, [location.pathname, isAuthenticated, refreshAuthState]);
 
   // Update local state when user data changes
   useEffect(() => {
@@ -55,7 +75,7 @@ const Navbar = () => {
 
   // Setup socket notification listener
   useEffect(() => {
-    if (isAuthenticated) {
+    if (directlyAuthenticated) {
       const token = localStorage.getItem('token');
       if (token) {
         // Ensure socket is connected
@@ -81,7 +101,7 @@ const Navbar = () => {
         };
       }
     }
-  }, [isAuthenticated]);
+  }, [directlyAuthenticated]);
 
   // Reset unread count when navigating to messaging
   useEffect(() => {
@@ -145,7 +165,7 @@ const Navbar = () => {
               Home
             </Button>
             
-            {!isAuthenticated && (
+            {!directlyAuthenticated && (
               <>
                 <Button 
                   color="primary" 
@@ -178,7 +198,7 @@ const Navbar = () => {
                 </Button>
               </>
             )}
-            {isAuthenticated && (
+            {directlyAuthenticated && (
               <>
                 <Button 
                   color="inherit" 
@@ -259,7 +279,7 @@ const Navbar = () => {
               </IconButton>
             </Tooltip>
 
-            {isAuthenticated && (
+            {directlyAuthenticated && (
               <IconButton
                 size="small"
                 edge="end"

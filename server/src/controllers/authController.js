@@ -15,6 +15,19 @@ const generateToken = (user) => {
 };
 
 /**
+ * Generate refresh token for user
+ * @param {Object} user - User object
+ * @returns {String} Refresh token
+ */
+const generateRefreshToken = (user) => {
+  return jwt.sign(
+    { userId: user._id },
+    process.env.REFRESH_TOKEN_SECRET || 'your_refresh_token_secret',
+    { expiresIn: '7d' }
+  );
+};
+
+/**
  * User registration
  * @route POST /api/auth/register
  */
@@ -26,8 +39,11 @@ const register = async (req, res) => {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
-        status: 'error',
-        message: 'User with this email already exists'
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'User with this email already exists'
+        }
       });
     }
     
@@ -43,26 +59,31 @@ const register = async (req, res) => {
     
     await newUser.save();
     
-    // Generate JWT token
+    // Generate tokens
     const token = generateToken(newUser);
+    const refreshToken = generateRefreshToken(newUser);
     
     // Return user data (excluding password) and token
     const userData = newUser.toObject();
     delete userData.password;
     
     res.status(201).json({
-      status: 'success',
+      success: true,
       data: {
         user: userData,
-        token
-      }
+        token,
+        refreshToken
+      },
+      message: 'User registered successfully'
     });
   } catch (error) {
     console.error('Error registering user:', error);
     res.status(500).json({
-      status: 'error',
-      message: 'An error occurred while registering user',
-      error: error.message
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while registering user'
+      }
     });
   }
 };
@@ -81,31 +102,132 @@ const login = async (req, res) => {
     // Check if user exists and password is correct
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({
-        status: 'error',
-        message: 'Invalid email or password'
+        success: false,
+        error: {
+          code: 'INVALID_CREDENTIALS',
+          message: 'Invalid email or password'
+        }
       });
     }
     
-    // Generate JWT token
+    // Generate tokens
     const token = generateToken(user);
+    const refreshToken = generateRefreshToken(user);
     
     // Return user data (excluding password) and token
     const userData = user.toObject();
     delete userData.password;
     
     res.status(200).json({
-      status: 'success',
+      success: true,
       data: {
         user: userData,
-        token
-      }
+        token,
+        refreshToken
+      },
+      message: 'Login successful'
     });
   } catch (error) {
     console.error('Error logging in user:', error);
     res.status(500).json({
-      status: 'error',
-      message: 'An error occurred while logging in',
-      error: error.message
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while logging in'
+      }
+    });
+  }
+};
+
+/**
+ * Refresh access token
+ * @route POST /api/auth/refresh
+ */
+const refresh = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Refresh token is required'
+        }
+      });
+    }
+    
+    // Verify refresh token
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET || 'your_refresh_token_secret');
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'INVALID_CREDENTIALS',
+          message: 'Invalid refresh token'
+        }
+      });
+    }
+    
+    // Find user
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'RESOURCE_NOT_FOUND',
+          message: 'User not found'
+        }
+      });
+    }
+    
+    // Generate new tokens
+    const newToken = generateToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        token: newToken,
+        refreshToken: newRefreshToken
+      },
+      message: 'Token refreshed successfully'
+    });
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while refreshing token'
+      }
+    });
+  }
+};
+
+/**
+ * User logout
+ * @route POST /api/auth/logout
+ */
+const logout = async (req, res) => {
+  try {
+    // In a real implementation, you might want to invalidate the token
+    // by adding it to a blacklist or similar mechanism
+    
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    console.error('Error logging out:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while logging out'
+      }
     });
   }
 };
@@ -121,7 +243,7 @@ const getCurrentUser = async (req, res) => {
     delete userData.password;
     
     res.status(200).json({
-      status: 'success',
+      success: true,
       data: {
         user: userData
       }
@@ -129,9 +251,11 @@ const getCurrentUser = async (req, res) => {
   } catch (error) {
     console.error('Error getting current user:', error);
     res.status(500).json({
-      status: 'error',
-      message: 'An error occurred while getting user profile',
-      error: error.message
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while getting user profile'
+      }
     });
   }
 };
@@ -139,5 +263,7 @@ const getCurrentUser = async (req, res) => {
 module.exports = {
   register,
   login,
+  refresh,
+  logout,
   getCurrentUser
 }; 

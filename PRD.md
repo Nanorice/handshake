@@ -1,5 +1,10 @@
 # Coffee Chat Connector - Product Requirements Document
 
+> **IMPORTANT**: This document is now deprecated. Please refer to the consolidated product documentation in the `/project_documentation` folder:
+> - `handshake-product-requirements.md` - For product requirements
+> - `handshake-software-specifications.md` - For UI/UX specifications
+> - `handshake-ux-design.md` - For software architecture and technical requirements
+
 ## App Overview
 A platform connecting **Professionals** (experienced workers) and **Seekers** (career-curious users) for paid virtual/offline coffee chats.
 
@@ -14,7 +19,7 @@ A platform connecting **Professionals** (experienced workers) and **Seekers** (c
 2. **Matching**:
    - System recommends Professionals to Seekers based on preferences.
 3. **Booking**:
-   - Seekers book slots from a Professional’s calendar.
+   - Seekers book slots from a Professional's calendar.
    - Payment processed via Stripe.
 4. **Meeting**:
    - Auto-generate Zoom link for virtual meetings.

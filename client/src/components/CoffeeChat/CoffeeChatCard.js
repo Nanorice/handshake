@@ -15,34 +15,40 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import EventIcon from '@mui/icons-material/Event';
 import VideocamIcon from '@mui/icons-material/Videocam';
 
-// A simplified version of the CoffeeChatCard component
 const CoffeeChatCard = ({
-  coffeeChat,
+  chat,
   onJoinMeeting,
   onCancel,
   onReschedule,
-  onLeaveReview
+  onReview
 }) => {
+  if (!chat) {
+    return null;
+  }
+
   const {
     id,
-    status,
-    scheduledTime,
-    duration,
-    price,
-    professional,
-    preferences,
-    zoomLink
-  } = coffeeChat;
+    status = 'pending',
+    scheduledAt,
+    duration = 30,
+    price = 0,
+    professional = {},
+    topics = [],
+    meetingLink,
+    hasReview = false
+  } = chat;
 
   // Format date and time
-  const formattedDate = new Date(scheduledTime).toLocaleDateString('en-US', {
+  const scheduledTime = scheduledAt ? new Date(scheduledAt) : new Date();
+  
+  const formattedDate = scheduledTime.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric'
   });
   
-  const formattedTime = new Date(scheduledTime).toLocaleTimeString('en-US', {
+  const formattedTime = scheduledTime.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit'
   });
@@ -56,25 +62,24 @@ const CoffeeChatCard = ({
             variant="contained"
             color="error" 
             size="small"
-            onClick={() => onCancel?.(id)}
+            onClick={() => onCancel?.()}
           >
             Cancel
           </Button>
         );
       case 'confirmed':
-        const meetingTime = new Date(scheduledTime);
         const now = new Date();
         // Show join button only 5 minutes before the scheduled time
-        const showJoinButton = meetingTime.getTime() - now.getTime() <= 5 * 60 * 1000;
+        const showJoinButton = scheduledTime.getTime() - now.getTime() <= 5 * 60 * 1000;
         
         return (
           <>
-            {showJoinButton && zoomLink ? (
+            {showJoinButton && meetingLink ? (
               <Button 
                 variant="contained"
                 color="success" 
                 size="small"
-                onClick={() => onJoinMeeting?.(zoomLink)}
+                onClick={() => onJoinMeeting?.()}
                 startIcon={<VideocamIcon />}
               >
                 Join Meeting
@@ -85,7 +90,7 @@ const CoffeeChatCard = ({
                   variant="contained"
                   color="error" 
                   size="small"
-                  onClick={() => onCancel?.(id)}
+                  onClick={() => onCancel?.()}
                   sx={{ mr: 1 }}
                 >
                   Cancel
@@ -94,7 +99,7 @@ const CoffeeChatCard = ({
                   variant="contained"
                   color="secondary" 
                   size="small"
-                  onClick={() => onReschedule?.(id)}
+                  onClick={() => onReschedule?.()}
                 >
                   Reschedule
                 </Button>
@@ -103,20 +108,38 @@ const CoffeeChatCard = ({
           </>
         );
       case 'completed':
-        return (
+        return !hasReview ? (
           <Button 
             variant="contained"
             color="primary" 
             size="small"
-            onClick={() => onLeaveReview?.(id)}
+            onClick={() => onReview?.()}
           >
             Leave Review
           </Button>
+        ) : (
+          <Chip 
+            label="Reviewed" 
+            color="success"
+            size="small"
+          />
+        );
+      case 'cancelled':
+        return (
+          <Chip 
+            label="Cancelled" 
+            color="error"
+            size="small"
+          />
         );
       default:
         return null;
     }
   };
+
+  const professionalName = professional?.name || 
+                           `${professional?.firstName || ''} ${professional?.lastName || ''}`.trim() || 
+                           'Professional';
 
   return (
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -124,15 +147,16 @@ const CoffeeChatCard = ({
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Avatar 
-              src={professional.profilePicture} 
-              alt={`${professional.firstName} ${professional.lastName}`} 
+              src={professional?.profileImage} 
+              alt={professionalName} 
             />
             <Box>
               <Typography variant="h6">
-                Coffee Chat with {professional.firstName}
+                Coffee Chat with {professionalName.split(' ')[0]}
               </Typography>
               <Typography color="text.secondary" variant="body2">
-                {professional.seniority} • {professional.industry}
+                {professional?.title || professional?.position || ''} 
+                {professional?.company ? ` • ${professional.company}` : ''}
               </Typography>
             </Box>
           </Box>
@@ -165,21 +189,25 @@ const CoffeeChatCard = ({
           </Box>
         </Stack>
         
-        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-          Discussion Topics
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-          {preferences.topics.map((topic) => (
-            <Chip key={topic} label={topic} size="small" />
-          ))}
-        </Box>
+        {topics && topics.length > 0 && (
+          <>
+            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+              Discussion Topics
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {topics.map((topic, index) => (
+                <Chip key={index} label={topic} size="small" />
+              ))}
+            </Box>
+          </>
+        )}
       </CardContent>
       
       <Divider />
       
       <CardActions sx={{ p: 2, justifyContent: 'space-between' }}>
         <Typography variant="h6" color="primary" fontWeight={600}>
-          ${price.toFixed(2)}
+          ${typeof price === 'number' ? price.toFixed(2) : '0.00'}
         </Typography>
         <Box>
           {renderActionButtons()}
