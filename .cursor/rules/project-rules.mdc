@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 ### Project Rules
 1. **Frontend**:
@@ -25,6 +25,7 @@ alwaysApply: false
 5. **Documentation**:
    - Update `notepad.md` with reusable code snippets.
    - Keep DATABASE_SCHEMA.md in sync with model changes.
+   - Update all routes created and used in the API_ROUTES.md file
 
 6. **Interaction**:
    - When I asking about the code:
@@ -37,5 +38,8 @@ alwaysApply: false
    - by default do not execute any terminal commands and do not allow auto-run
    - Do not execute commands that start servers (npm start, npm run dev, etc.) - I'll handle these manually
    - Code changes are reflected in real-time in the running application, so there's no need to restart servers or start on new ports
+
+
+
 
 

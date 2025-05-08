@@ -299,7 +299,7 @@ io.on('connection', (socket) => {
 
 // Connect to MongoDB - making connection string consistent
 console.log('Connecting to MongoDB...');
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/handshake', {
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })

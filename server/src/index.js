@@ -16,9 +16,9 @@ app.use(express.json());
 app.use('/auth', authRoutes);
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test')
   .then(() => {
-    console.log('Connected to MongoDB Atlas');
+    console.log('Connected to MongoDB (database: test)');
   })
   .catch((error) => {
     console.error('MongoDB connection error:', error);

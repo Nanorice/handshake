@@ -139,7 +139,19 @@ const auth = async (req, res, next) => {
  */
 const authorize = (roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    // Log authorization info for debugging
+    console.log('Authorize middleware called:', {
+      userRole: req.user.role,
+      userType: req.user.userType,
+      allowedRoles: roles,
+      requestPath: req.path
+    });
+    
+    // Check both role and userType to support both old and new token formats
+    const userRole = req.user.role || req.user.userType;
+    
+    if (!roles.includes(userRole)) {
+      console.log(`Authorization failed: User role '${userRole}' not in allowed roles: [${roles.join(', ')}]`);
       return res.status(403).json({
         success: false,
         error: {
@@ -148,6 +160,8 @@ const authorize = (roles) => {
         }
       });
     }
+    
+    console.log('Authorization successful');
     next();
   };
 };

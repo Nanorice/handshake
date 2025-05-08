@@ -1,6 +1,12 @@
 const User = require('../models/User');
 const ProfessionalProfile = require('../models/ProfessionalProfile');
 const mongoose = require('mongoose');
+const ObjectId = mongoose.Types.ObjectId;
+
+// Database configuration reference
+const DATABASE_NAME = process.env.MONGODB_URI ? 
+  process.env.MONGODB_URI.split('/').pop() : 
+  'test';
 
 /**
  * Get list of professionals with filtering
@@ -8,9 +14,10 @@ const mongoose = require('mongoose');
  */
 const getProfessionals = async (req, res) => {
   try {
-    console.log('=== GET /api/professionals ===');
+    console.log('\n=== GET /api/professionals ===');
     console.log('Query params:', req.query);
     console.log('Database:', mongoose.connection.db.databaseName);
+    console.log('Expected database:', DATABASE_NAME);
     
     const { 
       industry,
@@ -21,176 +28,83 @@ const getProfessionals = async (req, res) => {
       limit = 10
     } = req.query;
     
-    // First check a sample user to determine the correct field for role
-    let roleField = 'role'; // default
-    try {
-      const sampleUser = await User.findOne().lean();
-      if (sampleUser) {
-        console.log('Sample user fields:', Object.keys(sampleUser));
-        // Check if we should use userType instead of role
-        if (sampleUser.hasOwnProperty('userType') && !sampleUser.hasOwnProperty('role')) {
-          roleField = 'userType';
-          console.log('Using "userType" field instead of "role"');
-        } else {
-          console.log('Using "role" field as expected');
-        }
-      }
-    } catch (error) {
-      console.error('Error checking user schema:', error);
-    }
+    // Find all professionals by either role or userType
+    const filter = {
+      $or: [
+        { role: 'professional' },
+        { userType: 'professional' }
+      ]
+    };
     
-    // Build filter query based on the correct field
-    const filter = { [roleField]: 'professional' };
-    console.log('Filter query:', filter);
+    // Find all professionals
+    const professionals = await User.find(filter)
+      .select('-password')
+      .lean();
     
-    // Find users who are professionals
-    let professionals = [];
-    let totalProfessionals = 0;
+    console.log(`Found ${professionals.length} professionals`);
     
-    try {
-      professionals = await User.find(filter)
-        .select('-password')
-        .limit(limit * 1)
-        .skip((page - 1) * limit)
-        .lean();
-      
-      // Get total count for pagination
-      totalProfessionals = await User.countDocuments(filter);
-      
-      console.log(`Found ${professionals.length} professionals (total: ${totalProfessionals})`);
-    } catch (dbError) {
-      console.error('Error querying database for professionals:', dbError);
-      professionals = [];
-    }
+    // Get all professional profiles
+    const profiles = await ProfessionalProfile.find({}).lean();
+    console.log(`Found ${profiles.length} professional profiles`);
     
-    // If no professionals found, return mock data for testing
-    if (professionals.length === 0) {
-      console.log('No professionals found, generating mock data');
-      return res.status(200).json({
-        success: true,
-        data: {
-          professionals: [
-            {
-              _id: '1',
-              firstName: 'John',
-              lastName: 'Doe',
-              email: 'john.doe@example.com',
-              role: 'professional',
-              profile: {
-                title: 'Senior Software Engineer',
-                company: 'Tech Solutions Inc.',
-                location: 'San Francisco, CA',
-                industries: ['Technology', 'Software Development'],
-                skills: ['JavaScript', 'React', 'Node.js', 'MongoDB'],
-                bio: 'Experienced software engineer with 10+ years in web development.',
-                experienceYears: 10,
-                rate: 120
-              }
-            },
-            {
-              _id: '2',
-              firstName: 'Jane',
-              lastName: 'Smith',
-              email: 'jane.smith@example.com',
-              role: 'professional',
-              profile: {
-                title: 'Marketing Director',
-                company: 'Brand Builders',
-                location: 'New York, NY',
-                industries: ['Marketing', 'Advertising'],
-                skills: ['Digital Marketing', 'Brand Strategy', 'Social Media Marketing'],
-                bio: 'Marketing professional with expertise in brand development and digital marketing.',
-                experienceYears: 8,
-                rate: 100
-              }
-            },
-            {
-              _id: '3',
-              firstName: 'Emily',
-              lastName: 'Davis',
-              email: 'emily.davis@example.com',
-              role: 'professional',
-              profile: {
-                title: 'UX/UI Designer',
-                company: 'Creative Designs',
-                location: 'Austin, TX',
-                industries: ['Design', 'Technology'],
-                skills: ['User Experience Design', 'User Interface Design', 'Figma', 'Adobe XD'],
-                bio: 'Creative designer focused on crafting intuitive and engaging user experiences.',
-                experienceYears: 6,
-                rate: 90
-              }
-            }
-          ],
-          pagination: {
-            total: 3,
-            currentPage: 1,
-            totalPages: 1,
-            limit: 10
-          }
-        }
-      });
-    }
-    
-    // Get professional profiles for each user
-    let profiles = [];
-    try {
-      const professionalIds = professionals.map(p => p._id);
-      console.log('Looking for profiles for users:', professionalIds);
-      
-      profiles = await ProfessionalProfile.find({
-        userId: { $in: professionalIds }
-      }).lean();
-      
-      console.log(`Found ${profiles.length} professional profiles`);
-    } catch (profileError) {
-      console.error('Error fetching professional profiles:', profileError);
-      profiles = [];
-    }
-    
-    // Map profiles to users
+    // Map professionals with their profiles
     const professionalData = professionals.map(pro => {
-      // First try exact match
-      let profile = profiles.find(p => p.userId && p.userId.toString() === pro._id.toString());
+      // Find matching profile
+      const profile = profiles.find(p => 
+        p.userId && (p.userId.toString() === pro._id.toString() || p.userId === pro._id.toString())
+      );
       
-      // If no profile found, look for other fields that might be used
-      if (!profile && profiles.length > 0) {
-        console.log('No exact profile match found for', pro._id, '- checking other fields');
-        profile = profiles.find(p => 
-          (p.user && p.user.toString() === pro._id.toString()) ||
-          (p.professionalId && p.professionalId.toString() === pro._id.toString())
-        );
-      }
+      // Create default profile from user data if no profile found
+      const defaultProfile = {
+        title: pro.title || pro.profession || 'Professional',
+        company: pro.company || pro.organization || 'Independent',
+        location: pro.location || 'Remote',
+        industries: pro.industries || ['General'],
+        skills: pro.skills || ['Consulting'],
+        bio: pro.bio || `Professional with expertise in various domains.`,
+        rate: 100,
+        availability: [],
+        experience: []
+      };
       
-      // Add debug info for this professional
+      // Log whether profile was found or created
       if (profile) {
-        console.log(`Found profile for ${pro.firstName || pro.name || pro.email}`);
+        console.log(`Using existing profile for ${pro.email || pro._id}`);
       } else {
-        console.log(`No profile found for ${pro.firstName || pro.name || pro.email}`);
+        console.log(`Using default profile for ${pro.email || pro._id}`);
       }
       
-      // Normalize user field names if needed
+      // Normalize user data
       const normalizedPro = { ...pro };
       
-      // Ensure firstName and lastName exist
+      // Ensure name fields exist
       if (!normalizedPro.firstName && normalizedPro.name) {
         const nameParts = normalizedPro.name.split(' ');
         normalizedPro.firstName = nameParts[0];
         normalizedPro.lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
       }
       
+      // Ensure both fields are set
+      normalizedPro.role = 'professional';
+      normalizedPro.userType = 'professional';
+      
+      // Combine user with profile (use existing or default)
       return {
         ...normalizedPro,
-        profile: profile || null
+        profile: profile || defaultProfile
       };
     });
     
-    // Filter by industry if specified
+    // Apply filtering
     let filteredData = professionalData;
-    if (industry) {
+    
+    // Filter by industry if specified and non-empty
+    if (industry && industry !== 'All') {
       filteredData = filteredData.filter(pro => 
         pro.profile && pro.profile.industries && 
-        pro.profile.industries.some(ind => ind.toLowerCase().includes(industry.toLowerCase()))
+        pro.profile.industries.some(ind => 
+          ind.toLowerCase().includes(industry.toLowerCase())
+        )
       );
     }
     
@@ -198,31 +112,27 @@ const getProfessionals = async (req, res) => {
     if (skill) {
       filteredData = filteredData.filter(pro => 
         pro.profile && pro.profile.skills && 
-        pro.profile.skills.some(s => s.toLowerCase().includes(skill.toLowerCase()))
+        pro.profile.skills.some(s => 
+          s.toLowerCase().includes(skill.toLowerCase())
+        )
       );
     }
     
-    // Filter by rate if specified
-    if (minRate !== undefined) {
-      filteredData = filteredData.filter(pro => 
-        pro.profile && pro.profile.rate && pro.profile.rate >= parseInt(minRate)
-      );
-    }
+    // Apply pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+    const paginatedData = filteredData.slice(startIndex, endIndex);
     
-    if (maxRate !== undefined) {
-      filteredData = filteredData.filter(pro => 
-        pro.profile && pro.profile.rate && pro.profile.rate <= parseInt(maxRate)
-      );
-    }
+    console.log(`Returning ${paginatedData.length} professionals after filtering and pagination`);
     
     res.status(200).json({
       success: true,
       data: {
-        professionals: filteredData,
+        professionals: paginatedData,
         pagination: {
-          total: totalProfessionals,
+          total: filteredData.length,
           currentPage: page,
-          totalPages: Math.ceil(totalProfessionals / limit),
+          totalPages: Math.ceil(filteredData.length / limit),
           limit
         }
       }
@@ -260,7 +170,8 @@ const getProfessionalById = async (req, res) => {
       });
     }
     
-    if (professional.role !== 'professional') {
+    // Check both role fields
+    if (professional.role !== 'professional' && professional.userType !== 'professional') {
       return res.status(400).json({
         success: false,
         error: {

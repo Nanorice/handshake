@@ -23,6 +23,10 @@ const TokenStorage = {
   }
 };
 
+// Define API_URL with explicit port 5000 to match the server
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+console.log('authUtils API_URL initialized as:', API_URL);
+
 // Get the JWT token from localStorage
 export const getAuthToken = () => {
   return TokenStorage.getToken();
@@ -120,6 +124,50 @@ export const logout = () => {
   localStorage.removeItem('userId');
   localStorage.removeItem('isAdmin');
   localStorage.removeItem('isLoggedIn');
+};
+
+// Update user role
+export const updateUserRole = async (role) => {
+  try {
+    console.log('Updating user role to:', role);
+    const token = getAuthToken();
+    
+    // Ensure we have the correct URL format
+    let baseUrl = API_URL;
+    if (!baseUrl.includes('/api')) {
+      baseUrl = `${baseUrl}/api`;
+    }
+    
+    const updateRoleUrl = `${baseUrl}/auth/update-role`;
+    console.log('Making update role request to:', updateRoleUrl);
+    
+    const response = await fetch(updateRoleUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ role })
+    });
+    
+    console.log('Update role response status:', response.status);
+    
+    const data = await response.json();
+    console.log('Update role response data:', data);
+    
+    if (data.success) {
+      // Update local storage with the updated user data
+      localStorage.setItem('userData', JSON.stringify(data.data.user));
+      console.log('User role updated successfully:', data.data.user.role);
+      return { success: true, user: data.data.user };
+    } else {
+      console.error('Failed to update user role:', data.error);
+      return { success: false, error: data.error };
+    }
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    return { success: false, error: { message: 'Network error updating user role' } };
+  }
 };
 
 // Debug authentication state - can be called from any component

@@ -27,6 +27,13 @@ GET  /api/professionals/:id         // Get specific professional details
 POST /api/professionals/availability // Update professional availability
 ```
 
+## Professional Public Profile Routes
+
+```
+GET  /api/professionalprofiles/me   // Get current professional's public profile (default from user info if not set)
+POST /api/professionalprofiles      // Create or update current professional's public profile
+```
+
 ## Session/Booking Routes
 
 ```

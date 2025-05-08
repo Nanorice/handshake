@@ -24,6 +24,7 @@ import ChatIcon from '@mui/icons-material/Chat';
 import { ThemeContext } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import socketService from '../services/socketService';
+import { getUserType } from '../utils/authUtils';
 
 // Add direct check function similar to App.js
 const checkDirectAuth = () => {
@@ -46,6 +47,7 @@ const Navbar = () => {
     firstName: '',
     lastName: ''
   });
+  const userType = getUserType();
 
   // Check direct auth status when route changes
   useEffect(() => {
@@ -317,6 +319,11 @@ const Navbar = () => {
               }}
             >
               <MenuItem component={Link} to="/profile" onClick={handleClose}>Profile</MenuItem>
+              {userType === 'professional' && (
+                <MenuItem component={Link} to="/public-profile-setup" onClick={handleClose}>
+                  Public Profile
+                </MenuItem>
+              )}
               <Divider />
               <MenuItem onClick={handleLogout}>Logout</MenuItem>
             </Menu>

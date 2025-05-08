@@ -260,10 +260,69 @@ const getCurrentUser = async (req, res) => {
   }
 };
 
+/**
+ * Update current user's role
+ * @route PUT /api/auth/update-role
+ */
+const updateUserRole = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { role } = req.body;
+    
+    if (!role || !['seeker', 'professional'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Valid role (seeker or professional) is required'
+        }
+      });
+    }
+    
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: { role } },
+      { new: true }
+    );
+    
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'RESOURCE_NOT_FOUND',
+          message: 'User not found'
+        }
+      });
+    }
+    
+    // Return updated user data (excluding password)
+    const userData = updatedUser.toObject();
+    delete userData.password;
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        user: userData
+      },
+      message: `User role updated to ${role} successfully`
+    });
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'An error occurred while updating user role'
+      }
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
   refresh,
   logout,
-  getCurrentUser
+  getCurrentUser,
+  updateUserRole
 }; 

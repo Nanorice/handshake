@@ -33,9 +33,55 @@ export const getProfessionals = async (filters = {}) => {
       headers
     });
     
-    console.log('Professionals API response:', response.data);
+    console.log('Professionals API raw response:', response);
+    console.log('Professionals API response data:', response.data);
     
     if (response.data && response.data.success) {
+      console.log('API response success. Full data structure:', JSON.stringify(response.data));
+      
+      // Use mock data if no real professionals found (for development)
+      if (response.data.data && 
+          response.data.data.professionals && 
+          response.data.data.professionals.length === 0) {
+        console.log('No real professionals found, but NOT returning mock data to diagnose issue');
+        
+        // Comment out mock data to ensure we see real server response
+        /*
+        return {
+          professionals: [
+            {
+              _id: 'mock1',
+              firstName: 'John',
+              lastName: 'Doe',
+              email: 'johndoe@example.com',
+              profileImage: 'https://ui-avatars.com/api/?name=John+Doe&background=random',
+              role: 'professional',
+              profile: {
+                title: 'Senior Developer',
+                skills: ['JavaScript', 'React', 'Node.js'],
+                rate: 100,
+                industries: ['Technology']
+              }
+            },
+            {
+              _id: 'mock2',
+              firstName: 'Jane',
+              lastName: 'Smith',
+              email: 'janesmith@example.com',
+              profileImage: 'https://ui-avatars.com/api/?name=Jane+Smith&background=random',
+              role: 'professional',
+              profile: {
+                title: 'UX Designer',
+                skills: ['UI/UX', 'Figma', 'Adobe XD'],
+                rate: 85,
+                industries: ['Design']
+              }
+            }
+          ]
+        };
+        */
+      }
+      
       return response.data.data;
     }
     

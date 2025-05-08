@@ -24,8 +24,9 @@ import MessagingTest from './pages/MessagingTest';
 import SimpleChat from './pages/SimpleChat';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeContext } from './contexts/ThemeContext';
-import { getCurrentUserId } from './utils/authUtils';
+import { getCurrentUserId, getUserType } from './utils/authUtils';
 import socketService from './services/socketService';
+import ProfessionalPublicProfileSetup from './components/Profile/ProfessionalPublicProfileSetup';
 
 // Helper function for direct auth check
 function checkDirectAuth() {
@@ -118,6 +119,7 @@ function AppRoutes() {
         <Route path="/test" element={checkDirectAuth() ? <><Navbar /><MessagingTest /></> : <Navigate to="/login" replace />} />
         <Route path="/simple-chat" element={checkDirectAuth() ? <><Navbar /><SimpleChat /></> : <Navigate to="/login" replace />} />
         <Route path="/admin" element={checkDirectAuth() ? <><Navbar /><AdminDashboard /></> : <Navigate to="/login" replace />} />
+        <Route path="/public-profile-setup" element={checkDirectAuth() && getUserType() === 'professional' ? <><Navbar /><ProfessionalPublicProfileSetup /></> : <Navigate to="/login" replace />} />
         
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

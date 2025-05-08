@@ -88,4 +88,18 @@ For development conventions, please refer to:
 
 ## License
 
-This project is licensed under the MIT License. 
+This project is licensed under the MIT License.
+
+## Database Configuration
+
+The application uses MongoDB as its database. Important details:
+
+- **Database Name**: `test`
+- **Connection String**: `mongodb://localhost:27017/test`
+- **Configuration File**: See `server/DATABASE_CONFIG.md` for more details
+
+If you encounter any issues with database connectivity, please ensure:
+
+1. MongoDB is running locally on port 27017
+2. The `.env` file in the server directory has the correct MONGODB_URI value
+3. All collections are in the `test` database 
