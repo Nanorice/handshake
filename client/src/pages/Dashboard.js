@@ -18,12 +18,14 @@ import {
   CircularProgress,
   Alert
 } from '@mui/material';
-import { CalendarMonth, Message, Person, Favorite, Event } from '@mui/icons-material';
+import { CalendarMonth, Message, Person, Favorite, Event, BugReport } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getAuthToken } from '../utils/authUtils';
+import { debugApiConnection } from '../services/professionalService';
+import { getApiBaseUrl } from '../utils/apiConfig';
 
-// Define API_URL with explicit port 5000 to match what the browser is using
+// Define API_URL with explicit port 5000 to match the server
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 console.log('Dashboard API_URL initialized as:', API_URL);
 
@@ -47,6 +49,27 @@ const Dashboard = () => {
     exists: false,
     value: null
   });
+  const [debugResult, setDebugResult] = useState(null);
+
+  // Debug function to test API connection
+  const testApiConnection = async () => {
+    setDebugResult({ loading: true });
+    try {
+      const result = await debugApiConnection();
+      setDebugResult({
+        success: result.success,
+        data: result.data,
+        error: result.error,
+        loading: false
+      });
+    } catch (error) {
+      setDebugResult({
+        success: false,
+        error: error.message,
+        loading: false
+      });
+    }
+  };
 
   useEffect(() => {
     console.log('Dashboard component loaded');
@@ -143,13 +166,9 @@ const Dashboard = () => {
       // Log the API URL to diagnose the issue
       console.log('Using API_URL:', API_URL);
       
-      // Ensure API_URL has the correct format
-      // Parse the API URL to ensure the structure is correct
-      let baseUrl = API_URL;
-      if (!baseUrl.includes('/api')) {
-        baseUrl = `${baseUrl}/api`;
-      }
-      console.log('Normalized baseUrl:', baseUrl);
+      // Get the base URL with /api prefix
+      const baseUrl = getApiBaseUrl();
+      console.log('Using baseUrl from centralized config:', baseUrl);
       
       // Fetch upcoming sessions
       try {
@@ -249,12 +268,55 @@ const Dashboard = () => {
               <Button color="inherit" size="small" onClick={handleLogout}>
                 Go to Login
               </Button>
-            ) : null
+            ) : (
+              <Button 
+                color="inherit" 
+                size="small" 
+                startIcon={<BugReport />}
+                onClick={testApiConnection}
+              >
+                Test API Connection
+              </Button>
+            )
           }
         >
           <Typography variant="body2">
             Token status: {tokenStatus.exists ? `Found (${tokenStatus.value})` : 'Missing!'}
           </Typography>
+        </Alert>
+      )}
+      
+      {/* Debug test results */}
+      {debugResult && (
+        <Alert 
+          severity={debugResult.success ? "success" : "error"} 
+          sx={{ mb: 2 }}
+        >
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            API Connection Test: {debugResult.loading ? "Testing..." : (debugResult.success ? "Success" : "Failed")}
+          </Typography>
+          {debugResult.error && (
+            <Typography variant="body2" component="pre" sx={{ 
+              backgroundColor: 'rgba(0,0,0,0.05)', 
+              p: 1, 
+              borderRadius: 1,
+              maxHeight: '200px',
+              overflow: 'auto'
+            }}>
+              Error: {debugResult.error}
+            </Typography>
+          )}
+          {debugResult.data && (
+            <Box sx={{ mt: 1 }}>
+              <Button 
+                size="small" 
+                variant="outlined"
+                onClick={() => console.log('Debug data:', debugResult.data)}
+              >
+                View Details in Console
+              </Button>
+            </Box>
+          )}
         </Alert>
       )}
       

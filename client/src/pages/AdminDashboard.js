@@ -205,7 +205,7 @@ const AdminDashboard = () => {
   const fetchUsers = async () => {
     try {
       // In a real app, this would be an API call
-      // const response = await axios.get('http://localhost:5000/api/users');
+      // const response = await axios.get('http://localhost:3001/api/users');
       // setUsers(response.data.data);
       
       // Using mock data for development
@@ -219,7 +219,7 @@ const AdminDashboard = () => {
   const fetchStats = async () => {
     try {
       // In a real app, this would be an API call
-      // const response = await axios.get('http://localhost:5000/api/admin/stats');
+      // const response = await axios.get('http://localhost:3001/api/admin/stats');
       // setStats(response.data.data);
       
       // Using mock data for development
@@ -271,25 +271,25 @@ const AdminDashboard = () => {
       // In a real app, these would be API calls
       switch (dialogAction) {
         case 'block':
-          // await axios.put(`http://localhost:5000/api/users/${selectedUser._id}/block`);
+          // await axios.put(`http://localhost:3001/api/users/${selectedUser._id}/block`);
           message = `User ${selectedUser.email} has been blocked`;
           // Update local state for the demo
           setUsers(users.map(u => u._id === selectedUser._id ? {...u, status: 'blocked'} : u));
           break;
         case 'unblock':
-          // await axios.put(`http://localhost:5000/api/users/${selectedUser._id}/unblock`);
+          // await axios.put(`http://localhost:3001/api/users/${selectedUser._id}/unblock`);
           message = `User ${selectedUser.email} has been unblocked`;
           // Update local state for the demo
           setUsers(users.map(u => u._id === selectedUser._id ? {...u, status: 'active'} : u));
           break;
         case 'delete':
-          // await axios.delete(`http://localhost:5000/api/users/${selectedUser._id}`);
+          // await axios.delete(`http://localhost:3001/api/users/${selectedUser._id}`);
           message = `User ${selectedUser.email} has been deleted`;
           // Update local state for the demo
           setUsers(users.filter(u => u._id !== selectedUser._id));
           break;
         case 'resetPassword':
-          // await axios.post(`http://localhost:5000/api/auth/reset-password`, { email: resetPasswordEmail });
+          // await axios.post(`http://localhost:3001/api/auth/reset-password`, { email: resetPasswordEmail });
           message = `Password reset link sent to ${resetPasswordEmail}`;
           break;
         default:

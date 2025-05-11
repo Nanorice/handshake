@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_URL, getApiBaseUrl } from './apiConfig';
 
 /**
  * Tests API connectivity to verify server routes are working
@@ -7,9 +8,6 @@ import axios from 'axios';
  */
 export const testApiEndpoint = async (endpoint) => {
   try {
-    // Ensure we're using the correct base URL
-    let API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-    
     // Make sure the endpoint starts with /api if not already included
     const apiEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     

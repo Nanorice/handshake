@@ -35,8 +35,9 @@ import CoffeeChatCard from '../components/CoffeeChat/CoffeeChatCard';
 import InfoIcon from '@mui/icons-material/Info';
 import EventIcon from '@mui/icons-material/Event';
 import axios from 'axios';
+import { getApiBaseUrl } from '../utils/apiConfig';
 
-// Define API_URL with explicit port 5000 to match what the browser is using
+// Define API_URL with explicit port 5000 to match the server
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 console.log('CoffeeChats API_URL initialized as:', API_URL);
 
@@ -86,12 +87,9 @@ const CoffeeChats = () => {
           throw new Error('Authentication required');
         }
         
-        // Ensure API_URL has the correct format
-        let baseUrl = API_URL;
-        if (!baseUrl.includes('/api')) {
-          baseUrl = `${baseUrl}/api`;
-        }
-        console.log('Normalized baseUrl:', baseUrl);
+        // Get the base URL with /api prefix
+        const baseUrl = getApiBaseUrl();
+        console.log('Using baseUrl from centralized config:', baseUrl);
         
         // Construct the full URL carefully
         const sessionsUrl = `${baseUrl}/sessions`;

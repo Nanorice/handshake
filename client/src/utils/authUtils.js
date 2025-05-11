@@ -1,3 +1,6 @@
+// Import any necessary modules here
+import { API_URL, getApiBaseUrl, getApiUrl } from './apiConfig';
+
 // Synchronous local storage wrapper to avoid race conditions
 const TokenStorage = {
   getToken: () => localStorage.getItem('token'),
@@ -23,13 +26,31 @@ const TokenStorage = {
   }
 };
 
-// Define API_URL with explicit port 5000 to match the server
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-console.log('authUtils API_URL initialized as:', API_URL);
+// Log the API URL from the imported config
+console.log('authUtils using API_URL:', API_URL);
 
 // Get the JWT token from localStorage
 export const getAuthToken = () => {
-  return TokenStorage.getToken();
+  const token = TokenStorage.getToken();
+  
+  // Add verbose debug logging for auth issues
+  if (!token) {
+    console.warn('getAuthToken: No token found in localStorage');
+    console.log('Auth state:', {
+      isLoggedIn: localStorage.getItem('isLoggedIn') === 'true',
+      hasUserData: !!localStorage.getItem('userData'),
+      hasUserId: !!localStorage.getItem('userId')
+    });
+  } else {
+    // Verify token format for debugging
+    const isJWT = token.startsWith('ey');
+    console.log('getAuthToken:', isJWT ? 'Valid JWT format' : 'Invalid token format', {
+      preview: token.substring(0, 10) + '...',
+      length: token.length
+    });
+  }
+  
+  return token;
 };
 
 // Set the JWT token in localStorage

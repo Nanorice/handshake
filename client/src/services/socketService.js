@@ -1,4 +1,6 @@
-import { io } from 'socket.io-client';
+import io from 'socket.io-client';
+import { getAuthToken } from '../utils/authUtils';
+import { API_URL } from '../utils/apiConfig';
 import { getCurrentUserId } from '../utils/authUtils';
 
 class SocketService {
@@ -15,11 +17,10 @@ class SocketService {
       this.disconnect();
     }
 
-    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-    console.log('Connecting to socket at URL:', apiUrl, 'with token:', token ? 'Token exists' : 'No token');
+    console.log('Connecting to socket at URL:', API_URL, 'with token:', token ? 'Token exists' : 'No token');
     
     try {
-      this.socket = io(apiUrl, {
+      this.socket = io(API_URL, {
         auth: { token },
         transports: ['websocket', 'polling'],
         reconnection: true,

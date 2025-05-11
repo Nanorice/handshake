@@ -2,6 +2,7 @@ import axios from 'axios';
 import { getAuthToken, getCurrentUserId } from '../utils/authUtils';
 import userService from './userService'; 
 import socketService from './socketService';
+import { getApiBaseUrl } from '../utils/apiConfig';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 

@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 import { getAuthToken, getCurrentUserId } from '../utils/authUtils';
 import userService from './userService';
+import { API_URL } from '../utils/apiConfig';
 
 // Singleton class for socket.io connection and messaging
 class SimpleChatService {
@@ -26,9 +27,8 @@ class SimpleChatService {
       return false;
     }
 
-    // Connect to socket.io server
-    const socketUrl = 'http://localhost:5000';
-    this.socket = io(socketUrl, {
+    // Connect to socket.io server using centralized API config
+    this.socket = io(API_URL, {
       auth: { token },
       transports: ['websocket', 'polling']
     });

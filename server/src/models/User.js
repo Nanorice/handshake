@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: true,
-    minlength: 8,
+    minlength: 6,
   },
   role: {
     type: String,
@@ -20,6 +20,7 @@ const userSchema = new mongoose.Schema({
     required: true,
     default: 'seeker'
   },
+  // Add userType as a virtual that maps to role
   name: {
     type: String,
     required: true,
@@ -28,18 +29,22 @@ const userSchema = new mongoose.Schema({
   bio: {
     type: String,
     trim: true,
+    required: false
   },
   resumeUrl: {
     type: String,
     trim: true,
+    required: false
   },
   linkedinUrl: {
     type: String,
     trim: true,
+    required: false
   },
   profileImage: {
     type: String,
     trim: true,
+    required: false
   },
   status: {
     type: String,
@@ -47,18 +52,35 @@ const userSchema = new mongoose.Schema({
     default: 'active'
   },
 }, {
-  timestamps: true // Automatically add createdAt and updatedAt fields
+  timestamps: true, // Automatically add createdAt and updatedAt fields
+  toJSON: { virtuals: true }, // Enable virtuals when converting to JSON
+  toObject: { virtuals: true } // Enable virtuals when converting to object
 });
+
+// Virtual for userType that maps to role
+userSchema.virtual('userType')
+  .get(function() {
+    return this.role;
+  })
+  .set(function(value) {
+    this.role = value;
+  });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
   try {
+    // Print debugging info
+    console.log('Hashing password for user:', this.email);
+    
+    // Use a simpler hash for testing
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
+    console.log('Password hashed successfully');
     next();
   } catch (error) {
+    console.error('Error hashing password:', error);
     next(error);
   }
 });

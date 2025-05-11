@@ -22,11 +22,11 @@ import MessageNotifications from './components/Messaging/MessageNotifications';
 import AdminDashboard from './pages/AdminDashboard';
 import MessagingTest from './pages/MessagingTest';
 import SimpleChat from './pages/SimpleChat';
+import PublicProfileSetupPage from './pages/PublicProfileSetupPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeContext } from './contexts/ThemeContext';
 import { getCurrentUserId, getUserType } from './utils/authUtils';
 import socketService from './services/socketService';
-import ProfessionalPublicProfileSetup from './components/Profile/ProfessionalPublicProfileSetup';
 
 // Helper function for direct auth check
 function checkDirectAuth() {
@@ -104,6 +104,8 @@ function AppRoutes() {
         <Route path="/" element={!checkDirectAuth() ? <Home /> : <Navigate to="/dashboard" replace />} />
         <Route path="/login" element={!checkDirectAuth() ? <LoginForm /> : <Navigate to="/dashboard" replace />} />
         <Route path="/register" element={!checkDirectAuth() ? <RegisterForm /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/register/professional" element={!checkDirectAuth() ? <RegisterProfessional /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/register/seeker" element={!checkDirectAuth() ? <RegisterSeeker /> : <Navigate to="/dashboard" replace />} />
         
         {/* Protected routes */}
         <Route path="/dashboard" element={checkDirectAuth() ? <><Navbar /><Dashboard /></> : <Navigate to="/login" state={{ from: '/dashboard' }} replace />} />
@@ -114,12 +116,23 @@ function AppRoutes() {
         <Route path="/matches" element={checkDirectAuth() ? <><Navbar /><Matches /></> : <Navigate to="/login" replace />} />
         <Route path="/coffee-chats" element={checkDirectAuth() ? <><Navbar /><CoffeeChats /></> : <Navigate to="/login" replace />} />
         <Route path="/professionals" element={checkDirectAuth() ? <><Navbar /><ProfessionalDiscovery /></> : <Navigate to="/login" replace />} />
-        <Route path="/register/professional" element={checkDirectAuth() ? <><Navbar /><RegisterProfessional /></> : <Navigate to="/login" replace />} />
-        <Route path="/register/seeker" element={checkDirectAuth() ? <><Navbar /><RegisterSeeker /></> : <Navigate to="/login" replace />} />
         <Route path="/test" element={checkDirectAuth() ? <><Navbar /><MessagingTest /></> : <Navigate to="/login" replace />} />
         <Route path="/simple-chat" element={checkDirectAuth() ? <><Navbar /><SimpleChat /></> : <Navigate to="/login" replace />} />
         <Route path="/admin" element={checkDirectAuth() ? <><Navbar /><AdminDashboard /></> : <Navigate to="/login" replace />} />
-        <Route path="/public-profile-setup" element={checkDirectAuth() && getUserType() === 'professional' ? <><Navbar /><ProfessionalPublicProfileSetup /></> : <Navigate to="/login" replace />} />
+        <Route 
+          path="/public-profile-setup" 
+          element={
+            checkDirectAuth() && getUserType() === 'professional' ? (
+              <>
+                <Navbar />
+                {/* Use React.memo to ensure component is only rendered once */}
+                {React.createElement(PublicProfileSetupPage, { key: 'profile-setup-singleton' })}
+              </>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
         
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

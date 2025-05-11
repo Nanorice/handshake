@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { getAuthToken } from '../utils/authUtils';
+import { getApiBaseUrl } from '../utils/apiConfig';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_URL = getApiBaseUrl();
 
 // Helper function to generate a consistent avatar for a user based on their ID
 function generateAvatar(id, firstName, lastName) {

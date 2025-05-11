@@ -1,0 +1,32 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Handshake Project Rules Index
+
+## Available Rules
+
+### Project Overview
+- [handshake-core-requirements.mdc](mdc:.cursor/rules/handshake-core-requirements.mdc) - Core product requirements and user flows
+- [handshake-architecture.mdc](mdc:.cursor/rules/handshake-architecture.mdc) - System architecture and technical stack
+
+### Development Guidelines
+- [project-rules.mdc](mdc:.cursor/rules/project-rules.mdc) - Basic project coding rules
+- [handshake-development-guidelines.mdc](mdc:.cursor/rules/handshake-development-guidelines.mdc) - Detailed development standards
+
+### Navigation and Structure
+- [handshake-navigation-guide.mdc](mdc:.cursor/rules/handshake-navigation-guide.mdc) - Codebase navigation and key user flows
+
+### Design System
+- [handshake-ux-design.mdc](mdc:.cursor/rules/handshake-ux-design.mdc) - UI/UX design guidelines
+
+## How to Use These Rules
+
+1. **For onboarding:** Start with core-requirements and navigation-guide
+2. **For development:** Follow development-guidelines and project-rules
+3. **For UI work:** Reference ux-design guidelines
+4. **For architecture decisions:** See architecture document
+
+Each rule file contains file references that can be clicked to navigate directly to the relevant code files.
+

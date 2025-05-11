@@ -17,7 +17,6 @@ const getProfessionals = async (req, res) => {
     console.log('\n=== GET /api/professionals ===');
     console.log('Query params:', req.query);
     console.log('Database:', mongoose.connection.db.databaseName);
-    console.log('Expected database:', DATABASE_NAME);
     
     const { 
       industry,
@@ -28,112 +27,75 @@ const getProfessionals = async (req, res) => {
       limit = 10
     } = req.query;
     
-    // Find all professionals by either role or userType
-    const filter = {
-      $or: [
-        { role: 'professional' },
-        { userType: 'professional' }
-      ]
-    };
+    // Find all professional profiles
+    let query = {};
     
-    // Find all professionals
-    const professionals = await User.find(filter)
-      .select('-password')
-      .lean();
-    
-    console.log(`Found ${professionals.length} professionals`);
-    
-    // Get all professional profiles
-    const profiles = await ProfessionalProfile.find({}).lean();
-    console.log(`Found ${profiles.length} professional profiles`);
-    
-    // Map professionals with their profiles
-    const professionalData = professionals.map(pro => {
-      // Find matching profile
-      const profile = profiles.find(p => 
-        p.userId && (p.userId.toString() === pro._id.toString() || p.userId === pro._id.toString())
-      );
-      
-      // Create default profile from user data if no profile found
-      const defaultProfile = {
-        title: pro.title || pro.profession || 'Professional',
-        company: pro.company || pro.organization || 'Independent',
-        location: pro.location || 'Remote',
-        industries: pro.industries || ['General'],
-        skills: pro.skills || ['Consulting'],
-        bio: pro.bio || `Professional with expertise in various domains.`,
-        rate: 100,
-        availability: [],
-        experience: []
-      };
-      
-      // Log whether profile was found or created
-      if (profile) {
-        console.log(`Using existing profile for ${pro.email || pro._id}`);
-      } else {
-        console.log(`Using default profile for ${pro.email || pro._id}`);
-      }
-      
-      // Normalize user data
-      const normalizedPro = { ...pro };
-      
-      // Ensure name fields exist
-      if (!normalizedPro.firstName && normalizedPro.name) {
-        const nameParts = normalizedPro.name.split(' ');
-        normalizedPro.firstName = nameParts[0];
-        normalizedPro.lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-      }
-      
-      // Ensure both fields are set
-      normalizedPro.role = 'professional';
-      normalizedPro.userType = 'professional';
-      
-      // Combine user with profile (use existing or default)
-      return {
-        ...normalizedPro,
-        profile: profile || defaultProfile
-      };
-    });
-    
-    // Apply filtering
-    let filteredData = professionalData;
-    
-    // Filter by industry if specified and non-empty
+    // Apply filters directly to the query
     if (industry && industry !== 'All') {
-      filteredData = filteredData.filter(pro => 
-        pro.profile && pro.profile.industries && 
-        pro.profile.industries.some(ind => 
-          ind.toLowerCase().includes(industry.toLowerCase())
-        )
-      );
+      query.industries = { $regex: industry, $options: 'i' };
     }
     
-    // Filter by skill if specified
     if (skill) {
-      filteredData = filteredData.filter(pro => 
-        pro.profile && pro.profile.skills && 
-        pro.profile.skills.some(s => 
-          s.toLowerCase().includes(skill.toLowerCase())
-        )
-      );
+      query.skills = { $regex: skill, $options: 'i' };
     }
+    
+    if (minRate) {
+      query.rate = { $gte: Number(minRate) };
+    }
+    
+    if (maxRate) {
+      query.rate = { ...query.rate, $lte: Number(maxRate) };
+    }
+    
+    // Count total matching documents for pagination
+    const totalCount = await ProfessionalProfile.countDocuments(query);
     
     // Apply pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const paginatedData = filteredData.slice(startIndex, endIndex);
+    const skip = (page - 1) * limit;
     
-    console.log(`Returning ${paginatedData.length} professionals after filtering and pagination`);
+    // Get professional profiles with user data
+    const profiles = await ProfessionalProfile.find(query)
+      .skip(skip)
+      .limit(Number(limit))
+      .populate('userId', '-password') // Join with User collection
+      .lean();
+    
+    console.log(`Found ${profiles.length} professional profiles`);
+    
+    // Format the data for the frontend
+    const professionals = profiles.map(profile => {
+      // Extract user data from the populated userId field
+      const user = profile.userId || {};
+      
+      return {
+        _id: user._id || profile.userId,
+        firstName: user.firstName || profile.name?.split(' ')[0] || '',
+        lastName: user.lastName || profile.name?.split(' ').slice(1).join(' ') || '',
+        email: user.email || profile.email,
+        role: 'professional',
+        userType: 'professional',
+        profileImage: user.profileImage || profile.profilePicture,
+        // Profile data
+        profile: {
+          title: profile.title || '',
+          bio: profile.bio || '',
+          industries: profile.industries || [],
+          skills: profile.skills || [],
+          rate: profile.rate || 0,
+          experience: profile.experience || []
+        }
+      };
+    });
     
     res.status(200).json({
       success: true,
       data: {
-        professionals: paginatedData,
+        professionals,
         pagination: {
-          total: filteredData.length,
-          currentPage: page,
-          totalPages: Math.ceil(filteredData.length / limit),
-          limit
+          total: totalCount,
+          currentPage: Number(page),
+          totalPages: Math.ceil(totalCount / Number(limit)),
+          limit: Number(limit)
         }
       }
     });

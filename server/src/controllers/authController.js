@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 
 /**
  * Generate JWT token for user
@@ -7,9 +8,12 @@ const jwt = require('jsonwebtoken');
  * @returns {String} JWT token
  */
 const generateToken = (user) => {
+  const secret = process.env.JWT_SECRET || 'your_jwt_secret';
+  console.log('Using JWT secret:', secret ? 'Secret provided' : 'Using fallback secret');
+  
   return jwt.sign(
     { userId: user._id, userType: user.userType },
-    process.env.JWT_SECRET || 'your_jwt_secret',
+    secret,
     { expiresIn: '1d' }
   );
 };
@@ -32,12 +36,67 @@ const generateRefreshToken = (user) => {
  * @route POST /api/auth/register
  */
 const register = async (req, res) => {
+  console.log('==== REGISTRATION REQUEST RECEIVED ====');
+  console.log('Request method:', req.method);
+  console.log('Request headers:', req.headers);
+  console.log('Request body:', req.body);
+  
   try {
-    const { email, password, firstName, lastName, userType, profile } = req.body;
+    // Validate database connection
+    const dbState = mongoose.connection.readyState;
+    console.log('MongoDB connection state:', dbState);
     
+    if (dbState !== 1) {
+      console.error('Database not connected. Current state:', dbState);
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'DATABASE_ERROR',
+          message: 'Database is not connected. Please try again later.'
+        }
+      });
+    }
+
+    // Extract user data from request
+    const { 
+      email, 
+      password, 
+      firstName, 
+      lastName, 
+      userType,
+      university,
+      major,
+      graduationYear,
+      interests,
+      careerGoals,
+      linkedinUrl,
+    } = req.body;
+    
+    console.log('Extracted user data:', {
+      email,
+      password: password ? '[PROVIDED]' : '[MISSING]',
+      firstName,
+      lastName,
+      userType,
+    });
+    
+    // Validate required fields
+    if (!email || !password || !firstName || !lastName) {
+      console.log('Missing required fields');
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Required fields missing: email, password, firstName, lastName'
+        }
+      });
+    }
+
     // Check if user already exists
+    console.log('Checking if user already exists with email:', email);
     const existingUser = await User.findOne({ email });
     if (existingUser) {
+      console.log('User already exists with email:', email);
       return res.status(400).json({
         success: false,
         error: {
@@ -46,43 +105,119 @@ const register = async (req, res) => {
         }
       });
     }
-    
+
     // Create new user
+    console.log('Creating new user with role:', userType || 'seeker');
     const newUser = new User({
       email,
       password,
-      firstName,
-      lastName,
-      userType,
-      profile
+      name: `${firstName} ${lastName}`,
+      role: userType || 'seeker',
+      linkedinUrl
     });
     
-    await newUser.save();
+    // Validate user model
+    console.log('Validating user model');
+    const validationError = newUser.validateSync();
+    if (validationError) {
+      console.error('Validation error:', validationError);
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Validation error',
+          details: validationError.errors
+        }
+      });
+    }
     
-    // Generate tokens
-    const token = generateToken(newUser);
-    const refreshToken = generateRefreshToken(newUser);
+    // Save user to database
+    console.log('Saving user to database');
+    try {
+      await newUser.save();
+      console.log('User saved successfully with ID:', newUser._id);
+      
+      // Create a professional profile if user type is professional
+      if (userType === 'professional') {
+        console.log('Creating initial professional profile');
+        try {
+          const ProfessionalProfile = require('../models/ProfessionalProfile');
+          const newProfile = new ProfessionalProfile({
+            userId: newUser._id,
+            industries: [],
+            skills: [],
+            experience: [],
+            availability: [],
+            rate: 0,
+            bio: "",
+            title: "",
+            name: `${firstName} ${lastName}`,
+            email: email,
+            profilePicture: "",
+          });
+          await newProfile.save();
+          console.log('Created initial professional profile');
+        } catch (profileError) {
+          console.error('Error creating professional profile:', profileError);
+          // Continue with registration even if profile creation fails
+          // We'll create it later if needed
+        }
+      }
+    } catch (saveError) {
+      console.error('Error saving user:', saveError);
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'DATABASE_ERROR',
+          message: 'Error saving user: ' + saveError.message
+        }
+      });
+    }
     
-    // Return user data (excluding password) and token
-    const userData = newUser.toObject();
-    delete userData.password;
-    
-    res.status(201).json({
-      success: true,
-      data: {
-        user: userData,
-        token,
-        refreshToken
-      },
-      message: 'User registered successfully'
-    });
+    // Generate authentication tokens
+    console.log('Generating authentication tokens');
+    try {
+      const token = generateToken(newUser);
+      const refreshToken = generateRefreshToken(newUser);
+      
+      // Prepare response data (excluding password)
+      const userData = newUser.toObject();
+      delete userData.password;
+      
+      // Add additional user info to response
+      userData.firstName = firstName;
+      userData.lastName = lastName;
+      
+      console.log('Registration successful, sending response');
+      
+      // Return success response
+      return res.status(201).json({
+        success: true,
+        data: {
+          user: userData,
+          token,
+          refreshToken
+        },
+        message: 'User registered successfully'
+      });
+    } catch (tokenError) {
+      console.error('Error generating tokens:', tokenError);
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'TOKEN_ERROR',
+          message: 'Error generating authentication tokens: ' + tokenError.message
+        }
+      });
+    }
   } catch (error) {
-    console.error('Error registering user:', error);
-    res.status(500).json({
+    console.error('Registration error:', error);
+    console.error('Stack trace:', error.stack);
+    return res.status(500).json({
       success: false,
       error: {
         code: 'SERVER_ERROR',
-        message: 'An error occurred while registering user'
+        message: 'An error occurred during registration: ' + error.message
       }
     });
   }
@@ -293,6 +428,39 @@ const updateUserRole = async (req, res) => {
           message: 'User not found'
         }
       });
+    }
+    
+    // Create a professional profile if role is set to professional
+    if (role === 'professional') {
+      console.log('Creating professional profile on role update');
+      try {
+        const ProfessionalProfile = require('../models/ProfessionalProfile');
+        // Check if a profile already exists
+        const existingProfile = await ProfessionalProfile.findOne({ userId });
+        if (!existingProfile) {
+          // Create a new profile
+          const newProfile = new ProfessionalProfile({
+            userId,
+            industries: [],
+            skills: [],
+            experience: [],
+            availability: [],
+            rate: 0,
+            bio: "",
+            title: "",
+            name: `${updatedUser.firstName || ""} ${updatedUser.lastName || ""}`,
+            email: updatedUser.email,
+            profilePicture: "",
+          });
+          await newProfile.save();
+          console.log('Created professional profile on role update');
+        } else {
+          console.log('Professional profile already exists');
+        }
+      } catch (profileError) {
+        console.error('Error creating professional profile:', profileError);
+        // Continue even if profile creation fails
+      }
     }
     
     // Return updated user data (excluding password)

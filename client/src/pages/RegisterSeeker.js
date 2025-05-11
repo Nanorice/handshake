@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -15,7 +15,7 @@ import {
   Snackbar,
   Chip
 } from '@mui/material';
-import { register } from '../services/authService';
+import { register, testServerConnection } from '../services/authService';
 
 const RegisterSeeker = () => {
   const navigate = useNavigate();
@@ -39,6 +39,22 @@ const RegisterSeeker = () => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [interestInput, setInterestInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverStatus, setServerStatus] = useState(null);
+
+  // Test server connection when component mounts
+  useEffect(() => {
+    const checkServerConnection = async () => {
+      try {
+        const result = await testServerConnection();
+        setServerStatus({ connected: true, message: result.message });
+      } catch (error) {
+        setServerStatus({ connected: false, message: error.message });
+      }
+    };
+    
+    checkServerConnection();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -84,16 +100,13 @@ const RegisterSeeker = () => {
   const validateForm = () => {
     const newErrors = {};
     
+    // Basic required field validation
     const requiredFields = [
       'email',
       'password',
       'confirmPassword',
       'firstName',
-      'lastName',
-      'university',
-      'major',
-      'graduationYear',
-      'careerGoals'
+      'lastName'
     ];
     
     requiredFields.forEach(field => {
@@ -102,22 +115,24 @@ const RegisterSeeker = () => {
       }
     });
 
+    // Email validation
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
 
+    // Password validation
     if (formData.password) {
-      if (formData.password.length < 8) {
-        newErrors.password = 'Password must be at least 8 characters long';
-      } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])/.test(formData.password)) {
-        newErrors.password = 'Password must contain lowercase, uppercase, number, and special character';
+      if (formData.password.length < 6) {
+        newErrors.password = 'Password must be at least 6 characters long';
       }
     }
 
+    // Password confirmation
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
+    // Graduation year validation
     if (formData.graduationYear && !/^\d{4}$/.test(formData.graduationYear)) {
       newErrors.graduationYear = 'Please enter a valid year (YYYY)';
     }
@@ -136,30 +151,42 @@ const RegisterSeeker = () => {
       return;
     }
 
-    try {
-      const formDataToSend = new FormData();
-      Object.keys(formData).forEach(key => {
-        if (key === 'interests') {
-          formDataToSend.append(key, JSON.stringify(formData[key]));
-        } else if (key === 'resume' && formData[key]) {
-          formDataToSend.append(key, formData[key]);
-        } else {
-          formDataToSend.append(key, formData[key]);
-        }
-      });
+    setIsSubmitting(true);
 
-      await register(formDataToSend);
-      setSnackbarMessage('Registration successful! Redirecting to login...');
+    try {
+      // Prepare user data
+      const userData = {
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        userType: 'seeker',
+        university: formData.university || '',
+        major: formData.major || '',
+        graduationYear: formData.graduationYear || '',
+        interests: formData.interests,
+        careerGoals: formData.careerGoals || '',
+        linkedinUrl: formData.linkedinUrl || ''
+      };
+
+      // Register user
+      const response = await register(userData);
+      
+      setSnackbarMessage('Registration successful! Redirecting to dashboard...');
       setSnackbarSeverity('success');
       setOpenSnackbar(true);
+      
+      // Redirect to dashboard after short delay
       setTimeout(() => {
-        navigate('/login');
-      }, 2000);
+        navigate('/dashboard');
+      }, 1500);
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Registration failed. Please try again.';
-      setSnackbarMessage(errorMessage);
+      console.error('Registration failed:', error);
+      setSnackbarMessage(error.message || 'Registration failed. Please try again.');
       setSnackbarSeverity('error');
       setOpenSnackbar(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -169,6 +196,14 @@ const RegisterSeeker = () => {
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', p: 3 }}>
+      {serverStatus && (
+        <Alert 
+          severity={serverStatus.connected ? 'success' : 'error'} 
+          sx={{ mb: 2 }}
+        >
+          Server status: {serverStatus.connected ? 'Connected' : 'Disconnected'} - {serverStatus.message}
+        </Alert>
+      )}
       <Paper elevation={3} sx={{ p: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom align="center">
           Register as Student
@@ -221,7 +256,7 @@ const RegisterSeeker = () => {
                 value={formData.password}
                 onChange={handleChange}
                 error={!!errors.password}
-                helperText={errors.password}
+                helperText={errors.password || "Password must be at least 6 characters"}
                 required
               />
             </Grid>
@@ -247,7 +282,6 @@ const RegisterSeeker = () => {
                 onChange={handleChange}
                 error={!!errors.university}
                 helperText={errors.university}
-                required
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -259,7 +293,6 @@ const RegisterSeeker = () => {
                 onChange={handleChange}
                 error={!!errors.major}
                 helperText={errors.major}
-                required
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -271,7 +304,6 @@ const RegisterSeeker = () => {
                 onChange={handleChange}
                 error={!!errors.graduationYear}
                 helperText={errors.graduationYear}
-                required
               />
             </Grid>
             <Grid item xs={12}>
@@ -285,7 +317,6 @@ const RegisterSeeker = () => {
                 onChange={handleChange}
                 error={!!errors.careerGoals}
                 helperText={errors.careerGoals}
-                required
               />
             </Grid>
             <Grid item xs={12}>
@@ -349,8 +380,9 @@ const RegisterSeeker = () => {
                 color="primary"
                 fullWidth
                 size="large"
+                disabled={isSubmitting}
               >
-                Register
+                {isSubmitting ? 'Registering...' : 'Register'}
               </Button>
             </Grid>
           </Grid>

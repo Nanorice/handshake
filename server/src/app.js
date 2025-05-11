@@ -9,140 +9,90 @@ const userRoutes = require('./routes/userRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const zoomRoutes = require('./routes/zoomRoutes');
-const debugRoutes = require('./debugRoutes');
 const professionalProfileRoutes = require('./routes/professionalProfileRoutes');
+const invitationRoutes = require('./routes/invitationRoutes');
 
 // Initialize express app
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-
-// Add request logging middleware
+// Debug request logger - logs all incoming requests
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log('Request Headers:', JSON.stringify(req.headers, null, 2));
+  
+  // Log body for non-GET requests
+  if (req.method !== 'GET' && req.body) {
+    console.log('Request Body:', JSON.stringify(req.body, null, 2));
+  }
+  
+  // Add response logging
+  const originalSend = res.send;
+  res.send = function(body) {
+    console.log(`Response ${res.statusCode} for ${req.method} ${req.url}`);
+    return originalSend.apply(this, arguments);
+  };
+  
   next();
 });
 
-// Logging middleware (only in development)
-if (process.env.NODE_ENV !== 'test') {
+// Body parsers
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// CORS middleware
+app.use(cors());
+
+// Request logger
+if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-// Test endpoint
+// Test endpoints
 app.get('/test', (req, res) => {
-  console.log('Test endpoint hit!');
   res.json({ message: 'Server is working!' });
 });
 
-// Debug routes (no auth required)
-app.use('/api/debug', debugRoutes);
-console.log('Debug routes registered at /api/debug');
-
-// Special endpoint for updating user roles (no auth required)
-app.post('/api/direct-update-role', async (req, res) => {
-  try {
-    const { email, role } = req.body;
-    console.log(`Direct update role request for email: ${email}, role: ${role}`);
-    
-    if (!email || !role || !['seeker', 'professional'].includes(role)) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Valid email and role (seeker or professional) are required' 
-      });
-    }
-    
-    const User = require('./models/User');
-    
-    // Use findOneAndUpdate instead of save() to avoid full validation
-    const result = await User.findOneAndUpdate(
-      { email },
-      { $set: { role } },
-      { new: true, runValidators: false } // Return updated document and skip validation
-    );
-    
-    if (!result) {
-      return res.status(404).json({ 
-        success: false,
-        error: 'User not found' 
-      });
-    }
-    
-    console.log(`User ${email} role updated to ${role}`);
-    
-    res.json({ 
-      success: true,
-      user: {
-        _id: result._id,
-        email: result.email,
-        role: result.role
-      }
-    });
-  } catch (error) {
-    console.error('Error in direct-update-role:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Server error: ' + error.message 
-    });
-  }
+// Test POST endpoint
+app.post('/test-post', (req, res) => {
+  console.log('Test POST request received');
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  res.json({
+    message: 'POST test successful',
+    receivedData: req.body
+  });
 });
 
-// Special endpoint for updating user roles and refreshing JWT token (no auth required)
-app.post('/api/direct-update-role-and-token', async (req, res) => {
-  try {
-    const { email, role } = req.body;
-    console.log(`Direct update role and token request for email: ${email}, role: ${role}`);
-    
-    if (!email || !role || !['seeker', 'professional'].includes(role)) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Valid email and role (seeker or professional) are required' 
-      });
+// Test PUT endpoint for debugging
+app.put('/test-put', (req, res) => {
+  console.log('Test PUT request received');
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  res.json({
+    message: 'PUT test successful',
+    receivedData: req.body
+  });
+});
+
+// Test detailed endpoint to diagnose request issues
+app.all('/debug-request/*', (req, res) => {
+  console.log('DEBUG REQUEST HIT:');
+  console.log('URL:', req.url);
+  console.log('Method:', req.method);
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  
+  res.json({
+    success: true,
+    request: {
+      url: req.url,
+      method: req.method,
+      path: req.path,
+      headers: req.headers,
+      body: req.body,
+      query: req.query
     }
-    
-    const User = require('./models/User');
-    const jwt = require('jsonwebtoken');
-    
-    // Use findOneAndUpdate instead of save() to avoid full validation
-    const result = await User.findOneAndUpdate(
-      { email },
-      { $set: { role } },
-      { new: true, runValidators: false } // Return updated document and skip validation
-    );
-    
-    if (!result) {
-      return res.status(404).json({ 
-        success: false,
-        error: 'User not found' 
-      });
-    }
-    
-    console.log(`User ${email} role updated to ${role}`);
-    
-    // Generate a new JWT token with the updated user info
-    const token = jwt.sign(
-      { userId: result._id, userType: result.userType, role: result.role },
-      process.env.JWT_SECRET || 'your_jwt_secret',
-      { expiresIn: '1d' }
-    );
-    
-    res.json({ 
-      success: true,
-      user: {
-        _id: result._id,
-        email: result.email,
-        role: result.role
-      },
-      token
-    });
-  } catch (error) {
-    console.error('Error in direct-update-role-and-token:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Server error: ' + error.message 
-    });
-  }
+  });
 });
 
 // API Routes
@@ -155,11 +105,11 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/zoom', zoomRoutes);
 app.use('/api/professionalprofiles', professionalProfileRoutes);
+app.use('/api/invitations', invitationRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Server Error:', err.message);
-  console.error(err.stack);
+  console.error('Error:', err.message);
   
   // Handle specific error types
   if (err.name === 'ValidationError') {
@@ -168,7 +118,7 @@ app.use((err, req, res, next) => {
       error: {
         code: 'VALIDATION_ERROR',
         message: err.message,
-        details: process.env.NODE_ENV === 'development' ? err.errors : undefined
+        details: err.errors
       }
     });
   }
@@ -178,8 +128,17 @@ app.use((err, req, res, next) => {
       success: false,
       error: {
         code: 'DATABASE_ERROR',
-        message: 'Database operation failed',
-        details: process.env.NODE_ENV === 'development' ? err.message : undefined
+        message: 'Database operation failed: ' + err.message
+      }
+    });
+  }
+  
+  if (err.name === 'SyntaxError' && err.type === 'entity.parse.failed') {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_JSON',
+        message: 'Invalid JSON in request body'
       }
     });
   }
@@ -189,8 +148,7 @@ app.use((err, req, res, next) => {
     success: false,
     error: {
       code: err.code || 'SERVER_ERROR',
-      message: err.message || 'Something went wrong!',
-      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+      message: err.message || 'Something went wrong!'
     }
   });
 });

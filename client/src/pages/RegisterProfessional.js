@@ -140,11 +140,11 @@ const RegisterProfessional = () => {
 
     try {
       await register(formData);
-      setSnackbarMessage('Registration successful! Redirecting to login...');
+      setSnackbarMessage('Registration successful! Redirecting to dashboard...');
       setSnackbarSeverity('success');
       setOpenSnackbar(true);
       setTimeout(() => {
-        navigate('/login');
+        navigate('/dashboard');
       }, 2000);
     } catch (error) {
       const errorMessage = error.response?.data?.message || 'Registration failed. Please try again.';

@@ -29,15 +29,12 @@ alwaysApply: true
 
 6. **Interaction**:
    - When I asking about the code:
-      - Explain code like you are a beginner
-      - Walk through step-by-step logic
+      - Always Explain code like to a beginner
+      - Always Walk through step-by-step logic
       - Suggest better patterns
 
 7. **Execution**:
-   - When I say you have full automony you can have the max access
-   - by default do not execute any terminal commands and do not allow auto-run
-   - Do not execute commands that start servers (npm start, npm run dev, etc.) - I'll handle these manually
-   - Code changes are reflected in real-time in the running application, so there's no need to restart servers or start on new ports
+   - Never start a new server when I have it already open
 
 
 

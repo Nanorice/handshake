@@ -6,7 +6,13 @@ const { auth, authorize } = require('../middleware/auth');
 const matchController = require('../controllers/matchController');
 
 // Test endpoint that doesn't require auth
-router.get('/test', matchController.testMatchesApi);
+router.get('/test', (req, res) => {
+  console.log('Match routes test endpoint accessed');
+  res.json({
+    success: true,
+    message: 'Match routes are working!'
+  });
+});
 
 // All other match routes require authentication
 router.use(auth);
@@ -16,7 +22,11 @@ router.get('/', matchController.getUserMatches);
 router.get('/:id', matchController.getMatchById);
 
 // Routes for seekers only
-router.post('/request', authorize(['seeker']), matchController.sendMatchRequest);
+router.post('/request', (req, res, next) => {
+  console.log('Match request endpoint accessed:', req.body);
+  console.log('Headers:', req.headers);
+  next();
+}, authorize(['seeker']), matchController.sendMatchRequest);
 
 // Routes for professionals only
 router.put('/:id/accept', authorize(['professional']), matchController.acceptMatchRequest);

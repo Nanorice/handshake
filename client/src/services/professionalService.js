@@ -1,9 +1,10 @@
 import axios from 'axios';
 import { getAuthToken } from '../utils/authUtils';
+import { API_URL, getApiBaseUrl } from '../utils/apiConfig';
 
-// Define API_URL with explicit port 5000 to match what the browser is using
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-console.log('professionalService API_URL initialized as:', API_URL);
+// Use the centralized getApiBaseUrl function for consistency
+const getApiUrl = getApiBaseUrl;
+console.log('professionalService using centralized API configuration');
 
 // Get all professionals
 export const getProfessionals = async (filters = {}) => {
@@ -14,7 +15,7 @@ export const getProfessionals = async (filters = {}) => {
     const token = getAuthToken();
     
     // Ensure we have the correct URL format
-    const baseUrl = API_URL.includes('/api') ? API_URL : `${API_URL}/api`;
+    const baseUrl = getApiUrl();
     
     // Make the API call with the token if available
     const fullUrl = `${baseUrl}/professionals`.replace(/\/+/g, '/').replace(':/', '://');
@@ -110,7 +111,7 @@ export const getProfessionals = async (filters = {}) => {
 // Get a professional by ID
 export const getProfessionalById = async (id) => {
   try {
-    const response = await axios.get(`${API_URL}/professionals/${id}`);
+    const response = await axios.get(`${getApiUrl()}/professionals/${id}`);
     
     if (response.data && response.data.success) {
       return response.data.data;
@@ -132,7 +133,7 @@ export const requestMatch = async (professionalId) => {
       throw new Error('Authentication required');
     }
     
-    const response = await axios.post(`${API_URL}/matches/request`, {
+    const response = await axios.post(`${getApiUrl()}/matches/request`, {
       professionalId
     }, {
       headers: {
@@ -170,7 +171,7 @@ export const getUserMatches = async () => {
     console.log('API_URL value:', API_URL);
     
     // Make sure we're using the correct API URL format
-    const baseUrl = API_URL.includes('/api') ? API_URL : `${API_URL}/api`;
+    const baseUrl = getApiUrl();
     
     // Make the API call with the existing token
     const fullUrl = `${baseUrl}/matches`.replace(/\/+/g, '/').replace(':/', '://');
@@ -209,7 +210,7 @@ export const getUserMessages = async () => {
       throw new Error('Authentication required');
     }
     
-    const response = await axios.get(`${API_URL}/messages`, {
+    const response = await axios.get(`${getApiUrl()}/messages`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -235,7 +236,7 @@ export const sendMessage = async (professionalId, content, messageType = 'text',
       throw new Error('Authentication required');
     }
     
-    const response = await axios.post(`${API_URL}/messages`, {
+    const response = await axios.post(`${getApiUrl()}/messages`, {
       professionalId,
         content,
         messageType,
@@ -256,6 +257,10 @@ export const sendMessage = async (professionalId, content, messageType = 'text',
 // Send a coffee chat invitation
 export const sendCoffeeChatInvite = async (professionalId, message) => {
   try {
+    console.log(`Sending coffee chat invite to professional: ${professionalId}`);
+    console.log(`Using API_URL: ${API_URL}`);
+    console.log(`Base URL from getApiUrl: ${getApiUrl()}`);
+    
     return await sendMessage(
       professionalId, 
       message,
@@ -343,7 +348,7 @@ export const confirmAndPay = async (threadId, inviteId, selectedTimeSlot, paymen
       throw new Error('Authentication required');
     }
     
-    const response = await axios.post(`${API_URL}/payments`, {
+    const response = await axios.post(`${getApiUrl()}/payments`, {
       threadId,
         inviteId,
         selectedTimeSlot,
@@ -374,4 +379,31 @@ function formatTimeSlot(timeSlot) {
   });
   
   return `${formattedDate} at ${timeSlot.time}`;
-} 
+}
+
+// Debug function to check if API server is reachable
+export const debugApiConnection = async () => {
+  try {
+    console.log('Checking API server connection...');
+    console.log('Using API_URL:', API_URL);
+    
+    // Try to access our debug endpoint
+    const debugUrl = `${API_URL}/debug-request/test`;
+    console.log('Sending debug request to:', debugUrl);
+    
+    const response = await axios.get(debugUrl);
+    console.log('Debug API response:', response.data);
+    
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    console.error('API connection check failed:', error);
+    return {
+      success: false,
+      error: error.message,
+      details: error.response?.data
+    };
+  }
+}; 

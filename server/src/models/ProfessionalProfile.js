@@ -61,6 +61,32 @@ const professionalProfileSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  // Basic profile information
+  name: {
+    type: String,
+    trim: true
+  },
+  email: {
+    type: String,
+    trim: true
+  },
+  title: {
+    type: String,
+    trim: true
+  },
+  bio: {
+    type: String,
+    trim: true
+  },
+  expertise: {
+    type: String,
+    trim: true
+  },
+  profilePicture: {
+    type: String,
+    trim: true
+  },
+  // Original fields
   industries: [{
     type: String,
     trim: true

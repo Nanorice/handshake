@@ -38,7 +38,8 @@ import {
   School, 
   FilterList, 
   MessageOutlined, 
-  CalendarMonth 
+  CalendarMonth,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { getProfessionals, requestMatch, sendCoffeeChatInvite } from '../services/professionalService';
 
@@ -71,6 +72,7 @@ const ProfessionalDiscovery = () => {
     industry: 'All',
     experienceLevel: ''
   });
+  const [refreshTimestamp, setRefreshTimestamp] = useState(Date.now());
   const [selectedProfessional, setSelectedProfessional] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [matchMessage, setMatchMessage] = useState('');
@@ -85,12 +87,34 @@ const ProfessionalDiscovery = () => {
 
   useEffect(() => {
     loadProfessionals();
-  }, [filters]);
+  }, [filters, refreshTimestamp]);
+
+  // Listen for profile updates from other components
+  useEffect(() => {
+    const handleProfileUpdate = (event) => {
+      console.log('Detected professional profile update event:', event.detail);
+      handleRefresh();
+      setSnackbar({
+        open: true,
+        message: 'Professional profiles refreshed with latest updates',
+        severity: 'info'
+      });
+    };
+
+    // Add event listener
+    window.addEventListener('professionalProfileUpdated', handleProfileUpdate);
+
+    // Clean up
+    return () => {
+      window.removeEventListener('professionalProfileUpdated', handleProfileUpdate);
+    };
+  }, []);
 
   const loadProfessionals = async () => {
     try {
       setLoading(true);
       console.log('Loading professionals with filters:', filters);
+      console.log('Refresh timestamp:', refreshTimestamp);
       
       // Add detailed logging
       console.log('Current user auth token:', localStorage.getItem('token'));
@@ -162,6 +186,11 @@ const ProfessionalDiscovery = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRefresh = () => {
+    console.log('Manually refreshing professionals list');
+    setRefreshTimestamp(Date.now());
   };
 
   const handleFilterChange = (e) => {
@@ -326,7 +355,8 @@ const ProfessionalDiscovery = () => {
           borderRadius: 2
         }}
       >
-        <Grid container spacing={2} alignItems="center">
+        <Grid container spacing={2}>
+          <Grid container item spacing={3}>
           <Grid item xs={12} md={4}>
             <TextField
               name="searchTerm"
@@ -379,7 +409,7 @@ const ProfessionalDiscovery = () => {
               ))}
             </TextField>
           </Grid>
-          <Grid item xs={12} md={2}>
+          <Grid item xs={6} md={1}>
             <Button 
               variant="outlined" 
               fullWidth 
@@ -389,6 +419,18 @@ const ProfessionalDiscovery = () => {
               Filter
             </Button>
           </Grid>
+          <Grid item xs={6} md={1}>
+            <Button 
+              variant="outlined" 
+              fullWidth 
+              startIcon={<RefreshIcon />}
+              onClick={handleRefresh}
+              disabled={loading}
+            >
+              Refresh
+            </Button>
+          </Grid>
+        </Grid>
         </Grid>
       </Paper>
 
@@ -502,6 +544,15 @@ const ProfessionalDiscovery = () => {
             </Grid>
           ))}
         </Grid>
+      )}
+
+      {/* Add a last updated timestamp display */}
+      {!loading && !error && professionals.length > 0 && (
+        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <Typography variant="caption" color="text.secondary">
+            Last updated: {new Date(refreshTimestamp).toLocaleTimeString()}
+          </Typography>
+        </Box>
       )}
 
       {/* Match Dialog */}

@@ -8,11 +8,26 @@ const Thread = require('./models/Thread');
 const Message = require('./models/Message');
 require('dotenv').config();
 
-// Get port from environment variables or use default
-const PORT = process.env.PORT || 5001;
+// Force port to be 5000 to match the original configuration
+const PORT = process.env.PORT || 5000;
+console.log(`Configuring server to use port: ${PORT}`);
 
 // Create HTTP server
 const server = http.createServer(app);
+
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+  .then(() => {
+    console.log('Successfully connected to MongoDB database');
+    
+    // Start server after DB connection - ensure we use the PORT variable
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('Error connecting to MongoDB:', err);
+  });
 
 // Initialize Socket.io
 const io = socketIo(server, {
@@ -297,27 +312,20 @@ io.on('connection', (socket) => {
   });
 });
 
-// Connect to MongoDB - making connection string consistent
-console.log('Connecting to MongoDB...');
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => {
-  console.log('Connected to MongoDB (database:', mongoose.connection.db.databaseName + ')');
-  
-  // Start server after successful database connection
-  server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-})
-.catch((error) => {
-  console.error('MongoDB connection error:', error);
+// Add a handler for unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('==== UNHANDLED PROMISE REJECTION ====');
+  console.error('Reason:', reason);
+  console.error('Promise:', promise);
+  console.error('====================================');
 });
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled Promise Rejection:', err);
-  // Close server & exit process
-  process.exit(1);
+// Add a handler for uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('==== UNCAUGHT EXCEPTION ====');
+  console.error('Error message:', error.message);
+  console.error('Error name:', error.name);
+  console.error('Full error object:', error);
+  console.error('Error stack:', error.stack);
+  console.error('============================');
 }); 
