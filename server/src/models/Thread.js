@@ -21,7 +21,7 @@ const threadSchema = new mongoose.Schema({
     },
     messageType: {
       type: String,
-      enum: ['text', 'invite', 'timeProposal', 'timeSuggestion', 'timeConfirmation', 'payment'],
+      enum: ['text', 'file', 'reply', 'invite', 'timeProposal', 'timeSuggestion', 'timeConfirmation', 'payment'],
       default: 'text'
     }
   },

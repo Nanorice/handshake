@@ -18,8 +18,20 @@ const messageSchema = new mongoose.Schema({
   },
   messageType: {
     type: String,
-    enum: ['text', 'invite', 'timeProposal', 'timeSuggestion', 'timeConfirmation', 'payment'],
+    enum: ['text', 'file', 'reply', 'invite', 'timeProposal', 'timeSuggestion', 'timeConfirmation', 'payment'],
     default: 'text'
+  },
+  // For threaded replies
+  replyTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Message'
+  },
+  // For file attachments
+  file: {
+    fileName: String,
+    fileType: String,
+    fileSize: Number,
+    filePath: String
   },
   metadata: {
     // For invite messages
@@ -72,6 +84,7 @@ messageSchema.pre('save', function(next) {
 messageSchema.index({ threadId: 1, createdAt: -1 });
 messageSchema.index({ sender: 1 });
 messageSchema.index({ 'metadata.inviteId': 1 });
+messageSchema.index({ replyTo: 1 }); // Index for threaded replies
 
 const Message = mongoose.model('Message', messageSchema);
 

@@ -16,14 +16,20 @@ import {
   Avatar,
   Tooltip,
   CircularProgress,
-  Alert
+  Alert,
+  Tabs,
+  Tab,
+  Chip
 } from '@mui/material';
-import { CalendarMonth, Message, Person, Favorite, Event, BugReport } from '@mui/icons-material';
+import { Message, Person, Event, BugReport, Email, Notifications, WorkOutline, LocalCafe } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { getAuthToken } from '../utils/authUtils';
+import { getAuthToken, getUserData, getUserType } from '../utils/authUtils';
 import { debugApiConnection } from '../services/professionalService';
 import { getApiBaseUrl } from '../utils/apiConfig';
+import InvitationList from '../components/Invitation/InvitationList';
+import { getDashboardStats, getInvitationStats } from '../services/dashboardService';
+import { useTheme } from '@mui/material/styles';
 
 // Define API_URL with explicit port 5000 to match the server
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -44,12 +50,22 @@ const Dashboard = () => {
     completedMeetings: 0,
     profileViews: 0
   });
+  const [invitationStats, setInvitationStats] = useState({
+    pendingReceived: 0,
+    pendingSent: 0,
+    accepted: 0,
+    declined: 0,
+    total: 0
+  });
   const [dataLoading, setDataLoading] = useState(true);
   const [tokenStatus, setTokenStatus] = useState({
     exists: false,
     value: null
   });
   const [debugResult, setDebugResult] = useState(null);
+  const [invitationTab, setInvitationTab] = useState(0);
+  const theme = useTheme();
+  const isProfessional = getUserType() === 'professional';
 
   // Debug function to test API connection
   const testApiConnection = async () => {
@@ -163,9 +179,6 @@ const Dashboard = () => {
         value: token.substring(0, 10) + '...'
       });
       
-      // Log the API URL to diagnose the issue
-      console.log('Using API_URL:', API_URL);
-      
       // Get the base URL with /api prefix
       const baseUrl = getApiBaseUrl();
       console.log('Using baseUrl from centralized config:', baseUrl);
@@ -197,35 +210,30 @@ const Dashboard = () => {
         setUpcomingMeetings([]);
       }
       
-      // Fetch activity metrics
+      // Fetch activity metrics using our new service instead of the stats endpoint
       try {
-        // Construct the full URL carefully
-        const statsUrl = `${baseUrl}/users/stats`;
-        console.log('Fetching user stats from:', statsUrl);
+        console.log('Fetching dashboard statistics');
         
-        // Get a fresh token for this request
-        const requestToken = getAuthToken();
-        if (!requestToken) {
-          console.warn('Token missing for stats request');
-          throw new Error('No authentication token available');
+        // Use the new dashboard service
+        const dashboardStats = await getDashboardStats();
+        
+        if (dashboardStats.success) {
+          setActivityData(dashboardStats.data);
+          console.log('Dashboard stats loaded:', dashboardStats.data);
+        } else {
+          console.error('Error in dashboard stats:', dashboardStats.error);
+          throw new Error(dashboardStats.error?.message);
         }
         
-        const statsResponse = await axios.get(statsUrl, {
-          headers: {
-            'Authorization': `Bearer ${requestToken}`
-          }
-        });
-        
-        if (statsResponse.data && statsResponse.data.success) {
-          setActivityData(statsResponse.data.data || {
-            pendingRequests: 0,
-            totalMatches: 0,
-            completedMeetings: 0,
-            profileViews: 0
-          });
+        // Get detailed invitation statistics
+        const invStats = await getInvitationStats();
+        if (invStats.success) {
+          setInvitationStats(invStats.data);
+          console.log('Invitation stats loaded:', invStats.data);
         }
       } catch (error) {
-        console.error('Error fetching user stats:', error);
+        console.error('Error fetching dashboard statistics:', error);
+        // Set default values if API fails
         setActivityData({
           pendingRequests: 0,
           totalMatches: 0,
@@ -250,6 +258,16 @@ const Dashboard = () => {
     localStorage.removeItem('isLoggedIn');
     // Force navigation to login
     navigate('/login');
+  };
+
+  const handleInvitationTabChange = (event, newValue) => {
+    setInvitationTab(newValue);
+  };
+
+  const handleInvitationAction = (invitation, action, result) => {
+    console.log(`Invitation ${action}: `, invitation);
+    // Refresh dashboard data after invitation action
+    fetchDashboardData();
   };
 
   if (loading) {
@@ -321,9 +339,24 @@ const Dashboard = () => {
       )}
       
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Welcome back, {userData.firstName}!
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <Typography variant="h4" component="h1" gutterBottom sx={{ mr: 1 }}>
+            Welcome back, {userData.firstName}!
+          </Typography>
+          {isProfessional && (
+            <Chip 
+              icon={<WorkOutline fontSize="small" />}
+              label="Professional" 
+              size="small"
+              color="primary"
+              sx={{ 
+                fontWeight: 500,
+                backgroundColor: theme.palette.primary.main,
+                color: '#fff' 
+              }}
+            />
+          )}
+        </Box>
         <Typography variant="body1" color="text.secondary">
           Here's what's happening with your Handshake account
         </Typography>
@@ -332,71 +365,86 @@ const Dashboard = () => {
       <Grid container spacing={4}>
         {/* Quick actions */}
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
+          <Paper 
+            sx={{ 
+              p: 3, 
+              height: '100%',
+              ...(isProfessional && {
+                borderLeft: `4px solid ${theme.palette.primary.main}`,
+                boxShadow: `0 4px 12px rgba(${isProfessional ? '30, 64, 175' : '37, 99, 235'}, 0.1)`
+              })
+            }}
+          >
+            <Typography variant="h6" component="h2" sx={{ mb: 3, color: isProfessional ? theme.palette.primary.main : 'inherit' }}>
               Quick Actions
             </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Primary actions with higher visibility */}
+              <Button 
+                variant="contained"
+                color="primary" 
+                fullWidth
+                startIcon={<LocalCafe />}
+                onClick={() => navigate('/professionals')}
+                sx={{ p: 1.5, borderRadius: 2 }}
+              >
+                Find Professionals
+              </Button>
+              
+              <Button 
+                variant="contained"
+                color={isProfessional ? "primary" : "secondary"}
+                fullWidth
+                startIcon={<Message />}
+                onClick={() => navigate('/messaging')}
+                sx={{ p: 1.5, borderRadius: 2 }}
+              >
+                Messages
+              </Button>
+              
+              {/* Secondary actions */}
+              <Box sx={{ 
+                mt: 1, 
+                pt: 2, 
+                borderTop: `1px solid ${theme.palette.divider}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2
+              }}>
+                <Button 
+                  variant="outlined" 
+                  fullWidth
+                  startIcon={<Event />}
+                  onClick={() => navigate('/coffee-chats')}
+                  sx={{ p: 1.25, borderRadius: 2, justifyContent: 'flex-start' }}
+                >
+                  Coffee Chat Schedule
+                </Button>
+                
                 <Button 
                   variant="outlined" 
                   fullWidth 
                   startIcon={<Person />}
-                  onClick={() => {
-                    console.log('Navigating to profile page');
-                    navigate('/profile');
-                  }}
-                  sx={{ justifyContent: 'flex-start', textAlign: 'left', p: 1.5 }}
+                  onClick={() => navigate('/profile')}
+                  sx={{ p: 1.25, borderRadius: 2, justifyContent: 'flex-start' }}
                 >
                   Edit Profile
                 </Button>
-              </Grid>
-              <Grid item xs={6}>
-                <Tooltip title="View all your scheduled and past coffee chats" placement="top" arrow>
+                
+                {isProfessional && (
                   <Button 
                     variant="outlined" 
-                    fullWidth
-                    startIcon={<Event />}
-                    onClick={() => {
-                      console.log('Navigating to coffee chats page');
-                      navigate('/coffee-chats');
-                    }}
-                    sx={{ justifyContent: 'flex-start', textAlign: 'left', p: 1.5 }}
+                    fullWidth 
+                    startIcon={<WorkOutline />}
+                    onClick={() => navigate('/public-profile-setup')}
+                    sx={{ p: 1.25, borderRadius: 2, justifyContent: 'flex-start' }}
                   >
-                    Schedule History
+                    Professional Profile
                   </Button>
-                </Tooltip>
-              </Grid>
-              <Grid item xs={12}>
-                <Button 
-                  variant="contained"
-                  color="primary" 
-                  fullWidth
-                  startIcon={<Message />}
-                  onClick={() => {
-                    console.log('Navigating to messaging page');
-                    navigate('/messaging');
-                  }}
-                  sx={{ justifyContent: 'flex-start', textAlign: 'left', p: 1.5, mb: 1 }}
-                >
-                  Conversations
-                </Button>
-              </Grid>
-              <Grid item xs={12}>
-                <Button 
-                  variant="outlined" 
-                  fullWidth
-                  startIcon={<Favorite />}
-                  onClick={() => {
-                    console.log('Navigating to professionals discovery page');
-                    navigate('/professionals');
-                  }}
-                  sx={{ justifyContent: 'flex-start', textAlign: 'left', p: 1.5 }}
-                >
-                  Discover
-                </Button>
-              </Grid>
-            </Grid>
+                )}
+              </Box>
+            </Box>
           </Paper>
         </Grid>
 
@@ -497,10 +545,35 @@ const Dashboard = () => {
                   <Card sx={{ height: '100%' }}>
                     <CardContent>
                       <Typography variant="h5" component="div">
-                        {activityData.pendingRequests}
+                        {activityData.pendingRequests || invitationStats.pendingReceived || 0}
                       </Typography>
                       <Typography color="text.secondary">
-                        Pending Requests
+                        Pending Invitations
+                      </Typography>
+                      {invitationStats.pendingReceived > 0 && (
+                        <Button 
+                          size="small" 
+                          color="primary" 
+                          sx={{ mt: 1, p: 0 }}
+                          onClick={() => {
+                            setInvitationTab(0); // Switch to Received tab
+                            document.getElementById('invitation-section').scrollIntoView({ behavior: 'smooth' });
+                          }}
+                        >
+                          View all
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardContent>
+                      <Typography variant="h5" component="div">
+                        {activityData.totalMatches || invitationStats.accepted || 0}
+                      </Typography>
+                      <Typography color="text.secondary">
+                        Accepted Connections
                       </Typography>
                     </CardContent>
                   </Card>
@@ -509,11 +582,24 @@ const Dashboard = () => {
                   <Card sx={{ height: '100%' }}>
                     <CardContent>
                       <Typography variant="h5" component="div">
-                        {activityData.totalMatches}
+                        {invitationStats.pendingSent || 0}
                       </Typography>
                       <Typography color="text.secondary">
-                        Total Matches
+                        Outgoing Requests
                       </Typography>
+                      {invitationStats.pendingSent > 0 && (
+                        <Button 
+                          size="small" 
+                          color="primary" 
+                          sx={{ mt: 1, p: 0 }}
+                          onClick={() => {
+                            setInvitationTab(1); // Switch to Sent tab
+                            document.getElementById('invitation-section').scrollIntoView({ behavior: 'smooth' });
+                          }}
+                        >
+                          View all
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 </Grid>
@@ -521,28 +607,101 @@ const Dashboard = () => {
                   <Card sx={{ height: '100%' }}>
                     <CardContent>
                       <Typography variant="h5" component="div">
-                        {activityData.completedMeetings}
+                        {invitationStats.total || 0}
                       </Typography>
                       <Typography color="text.secondary">
-                        Completed Meetings
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Card sx={{ height: '100%' }}>
-                    <CardContent>
-                      <Typography variant="h5" component="div">
-                        {activityData.profileViews}
-                      </Typography>
-                      <Typography color="text.secondary">
-                        Profile Views
+                        Total Interactions
                       </Typography>
                     </CardContent>
                   </Card>
                 </Grid>
               </Grid>
             )}
+          </Paper>
+        </Grid>
+
+        {/* Connection Invitations - Modified section */}
+        <Grid item xs={12} id="invitation-section">
+          <Paper sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+              <Email color="primary" sx={{ mr: 1 }} />
+              <Typography variant="h6" component="h2">
+                Coffee Chat Invitations
+              </Typography>
+            </Box>
+            
+            <Grid container spacing={3}>
+              {/* Left side - Invitation Tabs */}
+              <Grid item xs={12} md={8}>
+                <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                  <Tabs 
+                    value={invitationTab} 
+                    onChange={handleInvitationTabChange} 
+                    variant="fullWidth"
+                    sx={{ backgroundColor: 'action.hover' }}
+                  >
+                    <Tab label="Received Invitations" />
+                    <Tab label="Sent Invitations" />
+                  </Tabs>
+                  
+                  <Box sx={{ p: 2, height: 350, overflow: 'auto' }}>
+                    {invitationTab === 0 ? (
+                      <InvitationList 
+                        type="received" 
+                        status="pending" 
+                        onInvitationAction={handleInvitationAction}
+                        sx={{ minHeight: 300 }}
+                      />
+                    ) : (
+                      <InvitationList 
+                        type="sent" 
+                        status="all" 
+                        onInvitationAction={handleInvitationAction}
+                        sx={{ minHeight: 300 }}
+                      />
+                    )}
+                  </Box>
+                </Box>
+              </Grid>
+              
+              {/* Right side - Actions and Info */}
+              <Grid item xs={12} md={4}>
+                <Card sx={{ mb: 2, height: 'calc(100% - 56px)' }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      {invitationTab === 0 ? "Pending Invitations" : "Sent Requests"}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      {invitationTab === 0 
+                        ? "Here are invitations from seekers who want to connect with you. Review and respond to start making connections."
+                        : "Track the status of invitations you've sent to professionals. Check back for responses."}
+                    </Typography>
+                    
+                    <Button 
+                      variant="contained" 
+                      fullWidth
+                      startIcon={<Person />}
+                      onClick={() => navigate('/professionals')}
+                      sx={{ mt: 2 }}
+                    >
+                      Find Professionals
+                    </Button>
+                    
+                    {invitationTab === 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          ✓ Accept invitations that match your expertise
+                        </Typography>
+                        <br />
+                        <Typography variant="caption" color="text.secondary">
+                          ✓ Provide feedback if you decline
+                        </Typography>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
           </Paper>
         </Grid>
       </Grid>

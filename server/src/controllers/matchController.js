@@ -8,7 +8,7 @@ const User = require('../models/User');
  */
 const sendMatchRequest = async (req, res) => {
   try {
-    const { professionalId } = req.body;
+    const { professionalId, message } = req.body;
     const seekerId = req.user._id;
     
     // Validate input
@@ -61,7 +61,8 @@ const sendMatchRequest = async (req, res) => {
     const newMatch = new Match({
       seeker: seekerId,
       professional: professionalId,
-      status: 'pending'
+      status: 'pending',
+      note: message
     });
     
     await newMatch.save();

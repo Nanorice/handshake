@@ -125,26 +125,33 @@ export const getProfessionalById = async (id) => {
 };
 
 // Request a match with a professional
-export const requestMatch = async (professionalId) => {
+export const requestMatch = async (professionalId, details = {}) => {
   try {
     const token = localStorage.getItem('token');
-    
+
     if (!token) {
       throw new Error('Authentication required');
     }
-    
-    const response = await axios.post(`${getApiUrl()}/matches/request`, {
-      professionalId
-    }, {
+
+    const payload = {
+      professionalId,
+      message: details.message || '' // Include message, default to empty string if not provided
+      // Add other details from the 'details' object if your backend expects them
+    };
+
+    console.log('Requesting match with payload:', payload);
+
+    const response = await axios.post(`${getApiUrl()}/matches/request`, payload, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
     });
-    
+
     return response.data;
   } catch (error) {
-    console.error('Error requesting match:', error);
-    throw error;
+    console.error('Error requesting match:', error.response ? error.response.data : error.message);
+    // Rethrow or handle more gracefully, e.g., return a structured error response
+    throw error.response ? new Error(error.response.data.error?.message || 'Match request failed') : error;
   }
 };
 

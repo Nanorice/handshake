@@ -11,9 +11,24 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const zoomRoutes = require('./routes/zoomRoutes');
 const professionalProfileRoutes = require('./routes/professionalProfileRoutes');
 const invitationRoutes = require('./routes/invitationRoutes');
+const simpleInvitationRoutes = require('./routes/simpleInvitationRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 // Initialize express app
 const app = express();
+
+// Debug logging for socket.io attachment
+app.on('mount', () => {
+  console.log('Express app mounted');
+});
+
+// Check if io is attached during requests (debug helper)
+app.use((req, res, next) => {
+  if (req.url.includes('/invitations') && req.method === 'PUT') {
+    console.log('Invitation endpoint hit - io attached:', !!req.app.get('io'));
+  }
+  next();
+});
 
 // Debug request logger - logs all incoming requests
 app.use((req, res, next) => {
@@ -106,6 +121,43 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/zoom', zoomRoutes);
 app.use('/api/professionalprofiles', professionalProfileRoutes);
 app.use('/api/invitations', invitationRoutes);
+app.use('/api/simple-invitations', simpleInvitationRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+// Diagnostic endpoint for invitation testing
+const Invitation = require('./models/Invitation');
+app.get('/api/diagnostic/invitations', async (req, res) => {
+  try {
+    console.log('Diagnostic endpoint accessed');
+    
+    // Basic MongoDB connection test
+    const count = await Invitation.countDocuments();
+    
+    // Get basic info about invitations without fully loading them
+    const invitationSummary = await Invitation.find()
+      .select('_id status sender receiver')
+      .limit(5)
+      .lean();
+    
+    res.json({
+      success: true,
+      message: 'MongoDB connection and Invitation collection test',
+      data: {
+        totalInvitations: count,
+        sampleInvitations: invitationSummary
+      }
+    });
+  } catch (error) {
+    console.error('Diagnostic endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+  }
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -3,19 +3,37 @@ import { API_URL, getApiBaseUrl, getApiUrl } from './apiConfig';
 
 // Synchronous local storage wrapper to avoid race conditions
 const TokenStorage = {
-  getToken: () => localStorage.getItem('token'),
+  getToken: () => {
+    const token = localStorage.getItem('token');
+    console.log('[TokenStorage.getToken] Attempting to get token. Found:', token ? token.substring(0, 20) + '...' : 'NULL');
+    return token;
+  },
   setToken: (token) => {
-    if (!token) return false;
+    console.log('[TokenStorage.setToken] Attempting to set token:', token ? token.substring(0, 20) + '...' : 'NULL or empty string');
+    if (!token) {
+      console.warn('[TokenStorage.setToken] Aborted: Token is null or empty.');
+      return false;
+    }
     try {
       localStorage.setItem('token', token);
-      // Verify it was set correctly
-      return localStorage.getItem('token') === token;
+      const retrievedToken = localStorage.getItem('token');
+      console.log('[TokenStorage.setToken] Token set. Verification - Retrieved:', retrievedToken ? retrievedToken.substring(0, 20) + '...' : 'NULL after setting!');
+      if (retrievedToken === token) {
+        console.log('[TokenStorage.setToken] Verification successful.');
+        return true;
+      } else {
+        console.error('[TokenStorage.setToken] VERIFICATION FAILED! Token in localStorage does not match token argument after setItem.', { originalToken: token, retrievedToken });
+        return false;
+      }
     } catch (e) {
-      console.error('Failed to set token:', e);
+      console.error('[TokenStorage.setToken] Failed to set token due to exception:', e);
       return false;
     }
   },
-  removeToken: () => localStorage.removeItem('token'),
+  removeToken: () => {
+    console.log('[TokenStorage.removeToken] Removing token from localStorage.');
+    localStorage.removeItem('token');
+  },
   debugToken: () => {
     const token = localStorage.getItem('token');
     console.log('Token debug:', {
@@ -31,26 +49,9 @@ console.log('authUtils using API_URL:', API_URL);
 
 // Get the JWT token from localStorage
 export const getAuthToken = () => {
-  const token = TokenStorage.getToken();
-  
-  // Add verbose debug logging for auth issues
-  if (!token) {
-    console.warn('getAuthToken: No token found in localStorage');
-    console.log('Auth state:', {
-      isLoggedIn: localStorage.getItem('isLoggedIn') === 'true',
-      hasUserData: !!localStorage.getItem('userData'),
-      hasUserId: !!localStorage.getItem('userId')
-    });
-  } else {
-    // Verify token format for debugging
-    const isJWT = token.startsWith('ey');
-    console.log('getAuthToken:', isJWT ? 'Valid JWT format' : 'Invalid token format', {
-      preview: token.substring(0, 10) + '...',
-      length: token.length
-    });
-  }
-  
-  return token;
+  // console.log('[authUtils.js] getAuthToken called, retrieving via TokenStorage.getToken()');
+  // The detailed log is now inside TokenStorage.getToken itself
+  return TokenStorage.getToken();
 };
 
 // Set the JWT token in localStorage

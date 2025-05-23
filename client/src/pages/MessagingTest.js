@@ -33,6 +33,7 @@ const MessagingTest = () => {
   const [testUsers, setTestUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [notificationLogs, setNotificationLogs] = useState([]);
+  const [activeThreadId, setActiveThreadId] = useState(null);
   
   // Load test users on initial render
   useEffect(() => {
@@ -40,7 +41,6 @@ const MessagingTest = () => {
       setLoadingUsers(true);
       try {
         const users = await userService.getTestUsers();
-        // Just get a few users for testing
         setTestUsers(users.slice(0, 10));
       } catch (err) {
         console.error('Error fetching test users:', err);
@@ -52,25 +52,23 @@ const MessagingTest = () => {
     
     fetchTestUsers();
     
-    // Initialize socket connection
     const token = getAuthToken();
     if (token) {
       socketService.connect(token);
     }
     
-    // Set up socket listeners for real-time updates
-    socketService.onNewMessage(handleNewMessage);
-    
-    // Set up notification listener to verify notifications
+    // Set up notification listener (can remain generic)
     socketService.onMessageNotification(handleMessageNotification);
     
     // Clean up on unmount
     return () => {
-      socketService.removeListener('new-message');
-      socketService.removeListener('message-notification');
+      if (activeThreadId) {
+        socketService.unsubscribeFromThread(activeThreadId);
+      }
+      socketService.removeListener('message-notification', handleMessageNotification); // Pass the handler to remove specific listener
       socketService.disconnect();
     };
-  }, []);
+  }, []); // activeThreadId removed from dependencies to avoid re-running this whole effect
   
   const handleMessageNotification = (notification) => {
     console.log('Notification received:', notification);
@@ -86,63 +84,58 @@ const MessagingTest = () => {
     }, 3000);
   };
   
-  const handleNewMessage = (message) => {
-    console.log('New message received:', message);
-    // Add the new message to our list if it belongs to the current thread
-    if (thread && message.threadId === thread._id) {
-      setMessages(prev => [...prev, message]);
-      setSuccess('New message received!');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccess('');
-      }, 3000);
-    }
+  // Renamed and repurposed for subscribed messages
+  const handleNewSubscribedMessage = (message) => {
+    console.log('New message from subscription:', message);
+    // The message from subscribeToThread should already be for the active thread.
+    // Add the new message to our list, preventing duplicates.
+    setMessages(prev => {
+      if (prev.find(m => m._id === message._id)) {
+        return prev; // Message already exists (e.g. from sender's optimistic update)
+      }
+      return [...prev, message];
+    });
+    setSuccess('New message received!');
+    setTimeout(() => setSuccess(''), 3000);
   };
   
   const handleUserSelect = async (user) => {
     setSelectedUser(user);
     setLoading(true);
-    
+    setError(''); // Clear previous errors
+    setMessages([]); // Clear messages from previous thread
+
+    // Unsubscribe from the old thread if there was one
+    if (activeThreadId) {
+      socketService.unsubscribeFromThread(activeThreadId);
+      setActiveThreadId(null);
+    }
+
     try {
-      // Check if a thread already exists with this user
       const threads = await messageService.getThreads();
-      const existingThread = threads.find(t => 
+      let currentThread = threads.find(t => 
         t.otherParticipant && t.otherParticipant._id === user._id
       );
       
-      if (existingThread) {
-        setThread(existingThread);
-        // Fetch messages for this thread
-        const data = await messageService.getMessages(existingThread._id);
-        setMessages(data.messages || []);
-        
-        // Join the socket room for this thread
-        socketService.joinThread(existingThread._id);
-      } else {
-        // Create a new thread with this user
-        try {
-          const newThread = await messageService.createThread(user._id);
-          setThread(newThread);
-          setMessages([]);
-          
-          // Join the socket room for this thread
-          socketService.joinThread(newThread._id);
-        } catch (err) {
-          console.error('Error creating thread:', err);
-          
-          // Fallback to mock thread if creation fails
-          const mockThread = {
-            _id: `thread-${user._id}`,
-            otherParticipant: user,
-            lastMessage: null,
-            createdAt: new Date().toISOString()
-          };
-          
-          setThread(mockThread);
-          setMessages([]);
+      if (!currentThread) {
+        console.log(`No existing thread found with ${user.firstName}, creating new one.`);
+        currentThread = await messageService.createThread(user._id);
+        if (!currentThread) {
+          throw new Error('Failed to create new thread.');
         }
+        setMessages([]); // Start with an empty message list for new threads
       }
+      
+      setThread(currentThread); // Set the full thread object
+      setActiveThreadId(currentThread._id); // Set active thread ID for subscription
+
+      // Fetch messages for this thread
+      const messageData = await messageService.getMessages(currentThread._id);
+      setMessages(messageData || []); // Assuming getMessages returns array directly or an object with a messages property
+      
+      // Subscribe to the new thread
+      socketService.subscribeToThread(currentThread._id, handleNewSubscribedMessage);
+
     } catch (err) {
       console.error('Error setting up conversation:', err);
       setError('Failed to set up conversation');
@@ -167,11 +160,8 @@ const MessagingTest = () => {
         newMessage.trim()
       );
       
-      // Add to our messages
+      // Add to our messages (optimistic update for sender)
       setMessages(prev => [...prev, sentMessage]);
-      
-      // Notify via socket
-      socketService.sendMessage(thread._id, sentMessage);
       
       // Clear the input
       setNewMessage('');

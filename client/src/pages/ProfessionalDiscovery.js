@@ -41,7 +41,8 @@ import {
   CalendarMonth,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { getProfessionals, requestMatch, sendCoffeeChatInvite } from '../services/professionalService';
+import { getProfessionals, requestMatch } from '../services/professionalService';
+import { sendInvitation } from '../services/invitationService';
 
 const industries = [
   'All',
@@ -281,7 +282,20 @@ const ProfessionalDiscovery = () => {
     try {
       setMatchRequestLoading(true);
       
-      const result = await sendCoffeeChatInvite(selectedProfessional.id, matchMessage);
+      // Create a proposed date one week from now
+      const proposedDate = new Date();
+      proposedDate.setDate(proposedDate.getDate() + 7);
+      
+      // Use the proper invitation API instead of messaging
+      const result = await sendInvitation({
+        receiverId: selectedProfessional._id,
+        message: matchMessage,
+        sessionDetails: {
+          proposedDate: proposedDate.toISOString(),
+          duration: 30, // default 30 minute meeting
+          topic: "Coffee Chat Discussion"
+        }
+      });
       
       handleCloseDialog();
       setSnackbar({
@@ -290,15 +304,15 @@ const ProfessionalDiscovery = () => {
         severity: 'success'
       });
       
-      // Navigate to mailbox page after successful invite
+      // Navigate to dashboard to see pending invitations
       setTimeout(() => {
-        navigate('/mailbox');
+        navigate('/dashboard');
       }, 2000);
     } catch (error) {
       console.error('Error sending coffee chat invite:', error);
       setSnackbar({
         open: true,
-        message: 'Failed to send coffee chat invitation. Please try again.',
+        message: `Failed to send invitation: ${error.message || 'Unknown error'}`,
         severity: 'error'
       });
     } finally {

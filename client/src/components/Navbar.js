@@ -14,17 +14,21 @@ import {
   useTheme,
   alpha,
   Badge,
-  Tooltip
+  Tooltip,
+  Chip
 } from '@mui/material';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import CalendarMonth from '@mui/icons-material/CalendarMonth';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import ChatIcon from '@mui/icons-material/Chat';
+import EmailIcon from '@mui/icons-material/Email';
+import WorkOutlineIcon from '@mui/icons-material/WorkOutline';
 import { ThemeContext } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import socketService from '../services/socketService';
 import { getUserType } from '../utils/authUtils';
+import { getInvitationNotifications } from '../services/invitationService';
 
 // Add direct check function similar to App.js
 const checkDirectAuth = () => {
@@ -42,12 +46,14 @@ const Navbar = () => {
   const [directlyAuthenticated, setDirectlyAuthenticated] = useState(checkDirectAuth());
   const [anchorEl, setAnchorEl] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadInvitations, setUnreadInvitations] = useState(0);
   const [userData, setUserData] = useState({
     firstName: '',
     lastName: ''
   });
   const userType = getUserType();
+  const isProfessional = userType === 'professional';
 
   // Check direct auth status when route changes
   useEffect(() => {
@@ -88,27 +94,56 @@ const Navbar = () => {
         // Listen for message notifications
         const handleMessageNotification = (data) => {
           console.log('Message notification received in Navbar:', data);
-          setUnreadCount(prevCount => {
+          setUnreadMessages(prevCount => {
             const newCount = prevCount + 1;
-            console.log(`Updated unread count: ${prevCount} → ${newCount}`);
+            console.log(`Updated unread messages count: ${prevCount} → ${newCount}`);
+            return newCount;
+          });
+        };
+        
+        // Listen for invitation notifications
+        const handleInvitationNotification = (data) => {
+          console.log('Invitation notification received in Navbar:', data);
+          setUnreadInvitations(prevCount => {
+            const newCount = prevCount + 1;
+            console.log(`Updated unread invitations count: ${prevCount} → ${newCount}`);
             return newCount;
           });
         };
         
         socketService.onMessageNotification(handleMessageNotification);
+        socketService.onInvitationNotification(handleInvitationNotification);
+        
+        // Check for pending invitations
+        fetchUnreadInvitations();
         
         // Clean up listener when component unmounts
         return () => {
           socketService.removeListener('message-notification');
+          socketService.removeListener('invitation-notification');
         };
       }
     }
   }, [directlyAuthenticated]);
 
-  // Reset unread count when navigating to messaging
+  // Fetch unread invitations count
+  const fetchUnreadInvitations = async () => {
+    try {
+      const result = await getInvitationNotifications();
+      if (result.success && result.data) {
+        setUnreadInvitations(result.data.unreadCount || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching invitation notifications:', error);
+    }
+  };
+
+  // Reset unread counts when navigating to respective pages
   useEffect(() => {
-    if (location.pathname === '/messaging') {
-      setUnreadCount(0);
+    if (location.pathname === '/messages') {
+      setUnreadMessages(0);
+    } else if (location.pathname === '/dashboard' || location.pathname === '/coffee-chats') {
+      setUnreadInvitations(0);
     }
   }, [location.pathname]);
 
@@ -132,41 +167,45 @@ const Navbar = () => {
       elevation={0}
       sx={{ 
         background: 'transparent', 
-        borderBottom: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+        borderBottom: `1px solid ${alpha(theme.palette.primary.main, isProfessional ? 0.2 : 0.1)}`,
         backdropFilter: 'blur(8px)',
         color: theme.palette.text.primary
       }}
     >
       <Container maxWidth="lg">
         <Toolbar sx={{ px: 0 }}>
-          <Typography 
-            variant="h6" 
-            component={Link} 
-            to="/" 
-            sx={{ 
-              flexGrow: 1, 
-              textDecoration: 'none', 
-              color: theme.palette.primary.main,
-              fontWeight: 700,
-              letterSpacing: '0.5px'
-            }}
-          >
-            Handshake
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Button 
-              color="inherit" 
+          <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+            <Typography 
+              variant="h6" 
               component={Link} 
-              to="/"
+              to="/" 
               sx={{ 
-                fontWeight: 500, 
-                textTransform: 'none',
-                fontSize: '0.95rem'
+                textDecoration: 'none', 
+                color: theme.palette.primary.main,
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                mr: 1
               }}
             >
-              Home
-            </Button>
-            
+              Handshake
+            </Typography>
+            {isProfessional && (
+              <Chip
+                icon={<WorkOutlineIcon fontSize="small" />}
+                label="Pro"
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: '0.65rem',
+                  fontWeight: 600,
+                  backgroundColor: theme.palette.primary.main,
+                  color: '#fff'
+                }}
+              />
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+
             {!directlyAuthenticated && (
               <>
                 <Button 
@@ -209,7 +248,13 @@ const Navbar = () => {
                   sx={{ 
                     fontWeight: 500, 
                     textTransform: 'none',
-                    fontSize: '0.95rem'
+                    fontSize: '0.95rem',
+                    ...(isProfessional && location.pathname === '/dashboard' && { 
+                      color: theme.palette.primary.main,
+                      borderBottom: `2px solid ${theme.palette.primary.main}`,
+                      borderRadius: 0,
+                      paddingBottom: '4px'
+                    })
                   }}
                 >
                   Dashboard
@@ -239,18 +284,29 @@ const Navbar = () => {
                 >
                   Schedule History
                 </Button>
+                <Tooltip title="Messages">
+                  <IconButton 
+                    color="inherit" 
+                    component={Link} 
+                    to="/messages"
+                  >
+                    <Badge badgeContent={unreadMessages} color="error">
+                      <ChatIcon />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
                 <IconButton
                   color="primary"
                   component={Link}
-                  to="/messaging"
+                  to="/dashboard"
                   sx={{ 
                     fontSize: '0.95rem',
                     position: 'relative'
                   }}
-                  aria-label="Messaging"
+                  aria-label="Coffee Chat Invitations"
                 >
-                  <Badge badgeContent={unreadCount} color="error">
-                    <ChatIcon />
+                  <Badge badgeContent={unreadInvitations} color="error">
+                    <EmailIcon />
                   </Badge>
                 </IconButton>
               </>
@@ -271,11 +327,15 @@ const Navbar = () => {
             )}
 
             {/* Dark Mode Toggle */}
-            <Tooltip title={darkMode ? "Switch to light mode" : "Switch to dark mode"}>
+            <Tooltip title={`Toggle ${darkMode ? 'light' : 'dark'} mode`}>
               <IconButton 
-                color="inherit" 
                 onClick={toggleDarkMode} 
-                aria-label="toggle dark mode"
+                color="inherit" 
+                sx={{ 
+                  ...(isProfessional && {
+                    color: darkMode ? '#fff' : theme.palette.primary.main
+                  })
+                }}
               >
                 {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
               </IconButton>

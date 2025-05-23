@@ -11,6 +11,12 @@ export const getApiBaseUrl = () => {
   return API_URL.includes('/api') ? API_URL : `${API_URL}/api`;
 };
 
+// Helper to get the Socket.io connection URL (without /api prefix)
+export const getSocketUrl = () => {
+  // Socket.io should connect to the root server, not the /api path
+  return API_URL;
+};
+
 // Helper to construct full API URLs
 export const getApiUrl = (endpoint) => {
   const baseUrl = getApiBaseUrl();
@@ -22,5 +28,6 @@ export const getApiUrl = (endpoint) => {
 // Log configuration once when the file is first imported
 console.log('API configuration initialized:', {
   API_URL,
-  baseUrl: getApiBaseUrl()
+  baseUrl: getApiBaseUrl(),
+  socketUrl: getSocketUrl()
 }); 

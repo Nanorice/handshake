@@ -9,33 +9,42 @@ import {
   CardContent,
   CardActions,
   Chip,
-  Avatar
+  Avatar,
+  Tooltip
 } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import EventIcon from '@mui/icons-material/Event';
 import VideocamIcon from '@mui/icons-material/Videocam';
+import ChatIcon from '@mui/icons-material/Chat';
+import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 
 const CoffeeChatCard = ({
   chat,
   onJoinMeeting,
   onCancel,
   onReschedule,
-  onReview
+  onReview,
+  onOpenChat,
+  onUnlockChat,
+  isInvitationBased = false
 }) => {
   if (!chat) {
     return null;
   }
 
   const {
-    id,
+    // id not used but kept for future use
     status = 'pending',
     scheduledAt,
     duration = 30,
-    price = 0,
+    // price not used but kept for future reference
     professional = {},
     topics = [],
     meetingLink,
-    hasReview = false
+    hasReview = false,
+    chatUnlocked = false,
+    invitationId = null
   } = chat;
 
   // Format date and time
@@ -52,6 +61,9 @@ const CoffeeChatCard = ({
     hour: '2-digit',
     minute: '2-digit'
   });
+
+  // Determine if chat is in the past
+  const isPastChat = new Date() > scheduledTime;
 
   // Determine which action buttons to show based on status
   const renderActionButtons = () => {
@@ -79,7 +91,7 @@ const CoffeeChatCard = ({
                 variant="contained"
                 color="success" 
                 size="small"
-                onClick={() => onJoinMeeting?.()}
+                onClick={() => onJoinMeeting?.(meetingLink)}
                 startIcon={<VideocamIcon />}
               >
                 Join Meeting
@@ -108,21 +120,51 @@ const CoffeeChatCard = ({
           </>
         );
       case 'completed':
-        return !hasReview ? (
-          <Button 
-            variant="contained"
-            color="primary" 
-            size="small"
-            onClick={() => onReview?.()}
-          >
-            Leave Review
-          </Button>
-        ) : (
-          <Chip 
-            label="Reviewed" 
-            color="success"
-            size="small"
-          />
+        return (
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {!hasReview && (
+              <Button 
+                variant="contained"
+                color="primary" 
+                size="small"
+                onClick={() => onReview?.()}
+              >
+                Leave Review
+              </Button>
+            )}
+            {isInvitationBased && invitationId && (
+              chatUnlocked ? (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  startIcon={<ChatIcon />}
+                  onClick={() => onOpenChat?.(invitationId)}
+                >
+                  Open Chat
+                </Button>
+              ) : (
+                <Tooltip title="Unlock chat to continue communication">
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    size="small"
+                    startIcon={<LockIcon />}
+                    onClick={() => onUnlockChat?.(invitationId)}
+                  >
+                    Unlock Chat
+                  </Button>
+                </Tooltip>
+              )
+            )}
+            {hasReview && !isInvitationBased && (
+              <Chip 
+                label="Reviewed" 
+                color="success"
+                size="small"
+              />
+            )}
+          </Box>
         );
       case 'cancelled':
         return (
@@ -160,16 +202,28 @@ const CoffeeChatCard = ({
               </Typography>
             </Box>
           </Box>
-          <Chip 
-            label={status.charAt(0).toUpperCase() + status.slice(1)} 
-            color={
-              status === 'confirmed' ? 'primary' : 
-              status === 'completed' ? 'success' : 
-              status === 'pending' ? 'warning' : 
-              'error'
-            }
-            size="small"
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {isInvitationBased && (
+              <Tooltip title="Invitation-based coffee chat">
+                <Chip 
+                  label="Invitation" 
+                  color="primary" 
+                  size="small"
+                  variant="outlined"
+                />
+              </Tooltip>
+            )}
+            <Chip 
+              label={status.charAt(0).toUpperCase() + status.slice(1)} 
+              color={
+                status === 'confirmed' ? 'primary' : 
+                status === 'completed' ? 'success' : 
+                status === 'pending' ? 'warning' : 
+                'error'
+              }
+              size="small"
+            />
+          </Box>
         </Box>
 
         <Divider sx={{ my: 1 }} />
@@ -201,17 +255,18 @@ const CoffeeChatCard = ({
             </Box>
           </>
         )}
+
+        {isInvitationBased && chatUnlocked && (
+          <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+            <LockOpenIcon fontSize="small" color="success" sx={{ mr: 1 }} />
+            <Typography variant="body2" color="success.main">
+              Chat unlocked - continue messaging after the meeting
+            </Typography>
+          </Box>
+        )}
       </CardContent>
-      
-      <Divider />
-      
-      <CardActions sx={{ p: 2, justifyContent: 'space-between' }}>
-        <Typography variant="h6" color="primary" fontWeight={600}>
-          ${typeof price === 'number' ? price.toFixed(2) : '0.00'}
-        </Typography>
-        <Box>
-          {renderActionButtons()}
-        </Box>
+      <CardActions sx={{ px: 2, py: 1, borderTop: '1px solid rgba(0,0,0,0.12)' }}>
+        {renderActionButtons()}
       </CardActions>
     </Card>
   );

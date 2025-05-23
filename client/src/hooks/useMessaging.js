@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import messageService from '../services/messageService';
 import socketService from '../services/socketService';
 import { getAuthToken, getCurrentUserId } from '../utils/authUtils';
@@ -7,6 +7,7 @@ import { getAuthToken, getCurrentUserId } from '../utils/authUtils';
  * Custom hook to handle messaging functionality
  */
 const useMessaging = () => {
+  // Always initialize with empty arrays to prevent undefined
   const [threads, setThreads] = useState([]);
   const [selectedThread, setSelectedThread] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -14,28 +15,91 @@ const useMessaging = () => {
   const [error, setError] = useState(null);
   const currentUserId = getCurrentUserId();
   
+  // Add refs to track refresh state
+  const refreshingRef = useRef(false);
+  const lastRefreshTimeRef = useRef(0);
+  const MIN_REFRESH_INTERVAL = 3000; // Minimum time between refreshes (3 seconds)
+  
   // Initialize socket and fetch threads
   useEffect(() => {
-    const token = getAuthToken();
-    if (token) {
-      socketService.connect(token);
-    }
+    // Keep track of initialization status
+    let isMounted = true;
+    setLoading(true);
     
-    fetchThreads();
+    const initializeMessaging = async () => {
+      try {
+        // Get JWT token and validate it first
+        const token = getAuthToken();
+        if (!token) {
+          console.error('useMessaging: No valid JWT token available');
+          setError(new Error('Authentication required'));
+          setLoading(false);
+          return;
+        }
+        
+        // Initialize socket connection
+        try {
+          await socketService.connect(token);
+          console.log('Socket connection established');
+          
+          // Set up socket listeners after successful connection
+          if (isMounted) {
+            socketService.onNewMessage(handleNewMessage);
+            socketService.onThreadRead(handleThreadRead);
+            socketService.onMessageNotification(handleMessageNotification);
+            socketService.onTyping(handleTyping);
+            socketService.onTypingStopped(handleTypingStopped);
+          }
+        } catch (socketError) {
+          console.error('Socket connection failed:', socketError);
+          // Don't return early - we can still try to load messages from API
+        }
+        
+        // Fetch threads from API
+        try {
+          const fetchedThreads = await messageService.getThreads();
+          if (isMounted) {
+            setThreads(fetchedThreads || []);
+          }
+        } catch (threadsError) {
+          console.error('Failed to fetch threads:', threadsError);
+          if (isMounted) {
+            setError(new Error('Could not load message threads'));
+          }
+        }
+        
+        if (isMounted) {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Messaging initialization failed:', error);
+        if (isMounted) {
+          setError(error);
+          setLoading(false);
+        }
+      }
+    };
     
-    // Set up socket listeners
-    socketService.onNewMessage(handleNewMessage);
-    socketService.onThreadRead(handleThreadRead);
-    socketService.onMessageNotification(handleMessageNotification);
+    initializeMessaging();
     
     // Cleanup on unmount
     return () => {
-      socketService.removeListener('new-message');
-      socketService.removeListener('thread-read');
-      socketService.removeListener('message-notification');
+      isMounted = false;
       
-      if (selectedThread) {
-        socketService.leaveThread(selectedThread._id);
+      // Clean up all socket listeners
+      if (socketService.isSocketConnected()) {
+        socketService.removeListener('new-message');
+        socketService.removeListener('thread-read');
+        socketService.removeListener('message-notification');
+        socketService.removeListener('typing');
+        socketService.removeListener('typing-stopped');
+        
+        // Leave any selected thread
+        if (selectedThread?._id) {
+          socketService.leaveThread(selectedThread._id);
+        }
+        
+        // Don't disconnect here as other components might use the socket
       }
     };
   }, []);
@@ -66,7 +130,10 @@ const useMessaging = () => {
     
     // Update thread list or create new thread
     setThreads(prev => {
-      const updatedThreads = [...prev];
+      // Ensure prev is always an array
+      const prevThreads = Array.isArray(prev) ? prev : [];
+      
+      const updatedThreads = [...prevThreads];
       const threadIndex = updatedThreads.findIndex(t => t._id === notification.threadId);
       
       if (threadIndex !== -1) {
@@ -89,8 +156,8 @@ const useMessaging = () => {
       } else {
         // If thread not found, we'll need to refresh the threads
         // This will trigger if it's a new conversation
-        console.log('Thread not found in list, refreshing threads');
-        setTimeout(() => fetchThreads(), 100); // Slight delay to ensure server has processed any new messages
+        console.log('Thread not found in list, scheduling thread refresh');
+        debouncedRefreshThreads();
         return updatedThreads; // Return unchanged for now, we'll update after fetch
       }
     });
@@ -98,28 +165,93 @@ const useMessaging = () => {
     // If the notification is for the currently selected thread, add the message
     if (selectedThread && notification.threadId === selectedThread._id) {
       // Add message to the current thread's messages
-      setMessages(prev => [...prev, notification.message]);
+      setMessages(prev => {
+        // Ensure prev is always an array
+        const prevMessages = Array.isArray(prev) ? prev : [];
+        return [...prevMessages, notification.message];
+      });
     }
   }, [selectedThread]);
   
   // Fetch all threads for the current user
   const fetchThreads = async () => {
+    // Prevent concurrent refreshes
+    if (refreshingRef.current) {
+      console.log('Thread refresh already in progress, skipping');
+      return;
+    }
+    
+    // Check if we're refreshing too frequently
+    const now = Date.now();
+    if (now - lastRefreshTimeRef.current < MIN_REFRESH_INTERVAL) {
+      console.log('Skipping thread refresh - too soon since last refresh');
+      return;
+    }
+    
     try {
+      refreshingRef.current = true;
       setLoading(true);
+      setError(null); // Clear previous errors
+      console.log('Fetching threads from messageService.getThreads()');
+      
+      // Add a small delay to ensure UI is properly initialized
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const threadData = await messageService.getThreads();
       console.log('Fetched threads:', threadData);
-      setThreads(threadData);
       
-      // Select the first thread if none is selected
-      if (!selectedThread && threadData.length > 0) {
-        setSelectedThread(threadData[0]);
+      // Add a defensive check to ensure threadData is valid
+      if (Array.isArray(threadData)) {
+        // Store threads in state
+        setThreads(threadData);
+        
+        // Select the first thread if none is selected
+        if (!selectedThread && threadData.length > 0) {
+          // Use a small delay to allow state to update properly
+          setTimeout(() => {
+            setSelectedThread(threadData[0]);
+          }, 50);
+        }
+      } else {
+        console.error('Invalid thread data received:', threadData);
+        setError('Failed to load conversations: Invalid data format');
+        
+        try {
+          // Try to fall back to local storage
+          const localThreads = await messageService.getLocalThreads();
+          if (Array.isArray(localThreads) && localThreads.length > 0) {
+            setThreads(localThreads);
+          } else {
+            // Ensure we always set an array even if local storage fails
+            setThreads([]);
+          }
+        } catch (localError) {
+          console.error('Local storage fallback failed:', localError);
+          setThreads([]);
+        }
       }
       
-      setLoading(false);
+      lastRefreshTimeRef.current = Date.now();
     } catch (err) {
       console.error('Error fetching threads:', err);
-      setError('Failed to load conversations');
+      setError(`Failed to load conversations: ${err.message}`);
+      
+      // Set empty array to prevent undefined errors
+      setThreads([]);
+      
+      // Log additional details for diagnosis
+      if (err.response) {
+        console.error('Error response:', {
+          status: err.response.status,
+          statusText: err.response.statusText,
+          data: err.response.data
+        });
+      } else if (err.request) {
+        console.error('No response received:', err.request);
+      }
+    } finally {
       setLoading(false);
+      refreshingRef.current = false;
     }
   };
   
@@ -129,32 +261,52 @@ const useMessaging = () => {
       setLoading(true);
       const data = await messageService.getMessages(threadId);
       console.log('Fetched messages for thread:', threadId, data.messages);
+      
+      // Ensure messages is always an array
       setMessages(data.messages || []);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching messages:', err);
       setError('Failed to load messages');
       setLoading(false);
+      
+      // Set empty array to prevent undefined errors
+      setMessages([]);
     }
   };
   
   // Handle a new message from the socket
   const handleNewMessage = useCallback((message) => {
+    if (!message) {
+      console.warn('Received undefined message from socket');
+      return;
+    }
+    
     console.log('Received new message via socket:', message);
     
     // Check if message is for the current selected thread
     if (selectedThread && message.threadId === selectedThread._id) {
+      // Ensure messages is always an array
+      const messagesArray = Array.isArray(messages) ? messages : [];
+      
       // Avoid duplicate messages by checking both _id and tempId
-      const messageExists = messages.some(m => 
-        (m._id === message._id) || 
-        (m.tempId && message.tempId && m.tempId === message.tempId) ||
-        (m._id === message.tempId) ||
-        (message._id === m.tempId)
-      );
+      const messageExists = messagesArray.some(m => {
+        if (!m) return false;
+        return (
+          (m._id === message._id) || 
+          (m.tempId && message.tempId && m.tempId === message.tempId) ||
+          (m._id === message.tempId) ||
+          (message._id === m.tempId)
+        );
+      });
       
       if (!messageExists) {
         console.log('Adding new message to current thread:', message);
-        setMessages(prev => [...prev, message]);
+        setMessages(prev => {
+          // Ensure prev is always an array
+          const prevMessages = Array.isArray(prev) ? prev : [];
+          return [...prevMessages, message];
+        });
         
         // Mark as read immediately since user is viewing this thread
         if (message.sender?._id !== currentUserId) {
@@ -171,7 +323,10 @@ const useMessaging = () => {
     
     // Update threads list to show latest message at top
     setThreads(prev => {
-      const updatedThreads = [...prev];
+      // Ensure prev is always an array
+      const prevThreads = Array.isArray(prev) ? prev : [];
+      
+      const updatedThreads = [...prevThreads];
       const threadIndex = updatedThreads.findIndex(t => t._id === message.threadId);
       
       if (threadIndex !== -1) {
@@ -201,27 +356,49 @@ const useMessaging = () => {
         updatedThreads.unshift(updatedThread);
       } else {
         // Thread doesn't exist yet, might be a new conversation
-        console.log('Thread not found in list, might be a new conversation');
-        
-        // Fetch threads to get the latest including any new ones
-        setTimeout(() => fetchThreads(), 200);
+        // We'll handle this by refreshing threads later
+        debouncedRefreshThreads();
       }
       
       return updatedThreads;
     });
   }, [selectedThread, messages, currentUserId]);
   
-  // Handle thread read status update
-  const handleThreadRead = useCallback(({ threadId, userId }) => {
-    setThreads(prev => {
-      return prev.map(thread => {
-        if (thread._id === threadId) {
-          return { ...thread, isRead: true, unreadCount: 0 };
-        }
-        return thread;
-      });
-    });
+  // Handle thread read status updates
+  const handleThreadRead = useCallback((data) => {
+    console.log('Thread read notification received:', data);
+    const { threadId, userId } = data;
+    
+    // Only need to update if read by another user
+    if (userId !== currentUserId) {
+      // The other user read the messages, no need to update anything in our UI
+      console.log('Messages marked as read by another user');
+    }
+  }, [currentUserId]);
+  
+  // Handle typing indicator
+  const handleTyping = useCallback((data) => {
+    // Not implemented yet
+    console.log('Typing indicator received:', data);
   }, []);
+  
+  // Handle typing stopped indicator
+  const handleTypingStopped = useCallback((data) => {
+    // Not implemented yet
+    console.log('Typing stopped indicator received:', data);
+  }, []);
+  
+  // Add a debounce for refreshThreads to prevent too many calls
+  let refreshThreadsTimeout = null;
+  const debouncedRefreshThreads = () => {
+    clearTimeout(refreshThreadsTimeout);
+    refreshThreadsTimeout = setTimeout(fetchThreads, 1000);
+  };
+
+  // Function to allow parent components to refresh threads
+  const refreshThreads = () => {
+    debouncedRefreshThreads();
+  };
   
   // Send a message with attachments using the updated messageService
   const sendMessage = async (messageText, attachments = []) => {
@@ -230,23 +407,29 @@ const useMessaging = () => {
       return null;
     }
     
+    // Ensure messageText is a string
+    const textContent = typeof messageText === 'string' ? messageText : '';
+    
     // Require either text content or attachments
-    if (!messageText.trim() && (!attachments || attachments.length === 0)) {
+    if (!textContent.trim() && (!attachments || !Array.isArray(attachments) || attachments.length === 0)) {
       console.error('Cannot send message: No content or attachments');
       return null;
     }
     
-    const trimmedContent = messageText.trim();
+    const trimmedContent = textContent.trim();
     
     try {
       // Process attachments if any (we already have the URLs from fileService)
-      const processedAttachments = attachments.map(attachment => ({
-        id: attachment.id,
-        name: attachment.name,
-        type: attachment.type,
-        size: attachment.size,
-        url: attachment.url || attachment.preview
-      }));
+      const processedAttachments = Array.isArray(attachments) ? attachments.map(attachment => {
+        if (!attachment) return null;
+        return {
+          id: attachment.id || `attachment-${Date.now()}-${Math.random()}`,
+          name: attachment.name || 'File',
+          type: attachment.type || 'application/octet-stream',
+          size: attachment.size || 0,
+          url: attachment.url || attachment.preview || ''
+        };
+      }).filter(Boolean) : [];
       
       // Create optimistic local message
       const optimisticMessage = {
@@ -266,7 +449,11 @@ const useMessaging = () => {
       };
       
       // Update UI immediately with optimistic message
-      setMessages(prev => [...prev, optimisticMessage]);
+      setMessages(prev => {
+        // Ensure prev is always an array
+        const prevMessages = Array.isArray(prev) ? prev : [];
+        return [...prevMessages, optimisticMessage];
+      });
       
       // Send to server using messageService
       const serverMessage = await messageService.sendMessage(
@@ -279,13 +466,15 @@ const useMessaging = () => {
       
       // Update messages with server response or keep optimistic if server fails
       if (serverMessage) {
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.tempId === optimisticMessage.tempId ? 
+        setMessages(prev => {
+          // Ensure prev is always an array
+          const prevMessages = Array.isArray(prev) ? prev : [];
+          return prevMessages.map(msg => 
+            msg && msg.tempId === optimisticMessage.tempId ? 
               { ...serverMessage, attachments: processedAttachments } : 
               msg
-          )
-        );
+          );
+        });
         
         return serverMessage;
       }
@@ -307,7 +496,11 @@ const useMessaging = () => {
       console.log('New thread created:', newThread);
       
       // Add to threads list and select it
-      setThreads(prev => [newThread, ...prev]);
+      setThreads(prev => {
+        // Ensure prev is always an array
+        const prevThreads = Array.isArray(prev) ? prev : [];
+        return [newThread, ...prevThreads];
+      });
       setSelectedThread(newThread);
       
       return newThread;
@@ -324,34 +517,31 @@ const useMessaging = () => {
       await messageService.markThreadAsRead(threadId);
       
       // Update local thread state
-      setThreads(prev => 
-        prev.map(thread => 
+      setThreads(prev => {
+        // Ensure prev is always an array
+        const prevThreads = Array.isArray(prev) ? prev : [];
+        return prevThreads.map(thread => 
           thread._id === threadId 
             ? { ...thread, unreadCount: 0 } 
             : thread
-        )
-      );
+        );
+      });
     } catch (err) {
       console.error('Error marking thread as read:', err);
     }
   };
   
-  // Refresh threads
-  const refreshThreads = () => {
-    console.log('Manually refreshing threads');
-    fetchThreads();
-  };
-  
   return {
-    threads,
+    // Always ensure threads and messages are arrays
+    threads: Array.isArray(threads) ? threads : [],
     selectedThread,
-    messages,
-    loading,
+    messages: Array.isArray(messages) ? messages : [],
+    loading: !!loading,
     error,
     setSelectedThread,
+    selectThread: setSelectedThread,
     sendMessage,
     createThread,
-    markThreadAsRead,
     refreshThreads
   };
 };

@@ -14,18 +14,21 @@ import {
   Link,
   Card,
   CardMedia,
-  Divider
+  Divider,
+  Collapse
 } from '@mui/material';
 import { 
   ArrowBack as ArrowBackIcon,
   Download as DownloadIcon,
-  Description as FileIcon
+  Description as FileIcon,
+  Reply as ReplyIcon
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { getCurrentUserId } from '../../utils/authUtils';
 import { ThemeContext } from '../../contexts/ThemeContext';
 import socketService from '../../services/socketService';
 import MessageComposer from './MessageComposer';
+import { saveScrollPosition, restoreScrollPosition } from '../../utils/scrollPositionManager';
 
 // MessageAttachment component to display file attachments
 const MessageAttachment = ({ attachment, isCurrentUser, darkMode }) => {
@@ -106,10 +109,47 @@ const formatFileSize = (bytes) => {
   else return (bytes / 1048576).toFixed(1) + ' MB';
 };
 
-// Replace the Message component completely with this version supporting attachments
-const Message = ({ message, isCurrentUser, darkMode }) => {
+// ReplyPreview component to show the original message being replied to
+const ReplyPreview = ({ originalMessage, darkMode }) => {
+  if (!originalMessage) return null;
+  
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        p: 1,
+        borderRadius: 1,
+        bgcolor: darkMode ? 'rgba(30, 41, 59, 0.4)' : 'rgba(241, 245, 249, 0.7)',
+        borderLeft: '3px solid',
+        borderLeftColor: 'primary.main',
+        mb: 1,
+        maxWidth: '90%'
+      }}
+    >
+      <Box sx={{ ml: 1 }}>
+        <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+          {originalMessage.sender?.firstName || 'User'}
+        </Typography>
+        <Typography variant="body2" sx={{ fontSize: '0.8rem', color: darkMode ? 'grey.300' : 'grey.700' }}>
+          {originalMessage.content?.length > 60 
+            ? originalMessage.content.substring(0, 60) + '...' 
+            : originalMessage.content}
+        </Typography>
+      </Box>
+    </Box>
+  );
+};
+
+// Replace the Message component completely with this version supporting attachments and replies
+const Message = ({ message, isCurrentUser, darkMode, allMessages, onReply }) => {
   const hasAttachments = message.attachments && message.attachments.length > 0;
   const hasContent = message.content && message.content.trim() !== '';
+  const isReply = message.messageType === 'reply' && message.replyTo;
+  
+  // Find the original message if this is a reply
+  const originalMessage = isReply && allMessages
+    ? allMessages.find(msg => msg._id === message.replyTo?._id || message.replyTo)
+    : null;
   
   return (
     <Box
@@ -119,11 +159,49 @@ const Message = ({ message, isCurrentUser, darkMode }) => {
         mb: 1,
       }}
     >
+      {!isCurrentUser && (
+        <Avatar 
+          src={message.sender?.profile?.profilePicture} 
+          alt={message.sender?.firstName || "User"}
+          sx={{ width: 32, height: 32, mr: 1, mt: 1 }}
+        />
+      )}
+      
       <Box
         sx={{
           maxWidth: '70%',
+          position: 'relative'
         }}
       >
+        {/* Reply action button */}
+        <IconButton
+          size="small"
+          onClick={() => onReply(message)}
+          sx={{
+            position: 'absolute',
+            right: isCurrentUser ? undefined : -24,
+            left: isCurrentUser ? -24 : undefined,
+            top: 0,
+            opacity: 0,
+            transition: 'opacity 0.2s',
+            '&:hover': {
+              opacity: 1,
+              backgroundColor: 'rgba(0,0,0,0.04)'
+            },
+            bgcolor: 'background.paper',
+            width: 20,
+            height: 20,
+            boxShadow: 1
+          }}
+        >
+          <ReplyIcon sx={{ fontSize: 12 }} />
+        </IconButton>
+        
+        {/* Original message preview if this is a reply */}
+        {isReply && originalMessage && (
+          <ReplyPreview originalMessage={originalMessage} darkMode={darkMode} />
+        )}
+        
         {/* Attachments */}
         {hasAttachments && (
           <Box 
@@ -155,13 +233,40 @@ const Message = ({ message, isCurrentUser, darkMode }) => {
                 ? 'primary.main' 
                 : darkMode ? 'background.paper' : 'grey.200',
               color: isCurrentUser ? 'white' : 'text.primary',
-              opacity: message.isLocal ? 0.7 : 1
+              opacity: message.isLocal ? 0.7 : 1,
+              ':hover': {
+                '& .reply-button': {
+                  opacity: 0.7
+                }
+              }
             }}
           >
             <Typography>{message.content}</Typography>
           </Box>
         )}
+        
+        {/* Time */}
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            display: 'block', 
+            textAlign: isCurrentUser ? 'right' : 'left',
+            mt: 0.5,
+            color: darkMode ? 'grey.500' : 'grey.600',
+            fontSize: '0.7rem'
+          }}
+        >
+          {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+        </Typography>
       </Box>
+      
+      {isCurrentUser && (
+        <Avatar 
+          src={message.sender?.profile?.profilePicture} 
+          alt={message.sender?.firstName || "User"}
+          sx={{ width: 32, height: 32, ml: 1, mt: 1 }}
+        />
+      )}
     </Box>
   );
 };
@@ -177,15 +282,77 @@ const MessageThread = ({
   darkMode = false
 }) => {
   const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const [replyTo, setReplyTo] = useState(null);
   const messagesEndRef = useRef(null);
   const currentUserId = getCurrentUserId();
   const otherUser = thread?.otherParticipant;
   const theme = useTheme();
+  const containerRef = useRef(null);
 
-  // Scroll to bottom on new messages
+  // Preserve scroll position between renders and HMR updates
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (thread?._id) {
+      // Attempt to restore the scroll position
+      const containerId = 'message-thread-container';
+      // Delay restore to ensure messages are rendered
+      setTimeout(() => {
+        const restored = restoreScrollPosition(containerId, thread._id);
+        if (!restored && messages.length > 0) {
+          // If we couldn't restore position, scroll to bottom
+          scrollToBottom();
+        }
+      }, 100);
+      
+      // Save scroll position on unmount
+      return () => {
+        saveScrollPosition('message-thread-container', thread._id);
+      };
+    }
+  }, [thread?._id]);
+
+  // Save scroll position periodically
+  useEffect(() => {
+    if (!thread?._id) return;
+    
+    const saveScrollInterval = setInterval(() => {
+      saveScrollPosition('message-thread-container', thread._id);
+    }, 5000);
+    
+    return () => {
+      clearInterval(saveScrollInterval);
+    };
+  }, [thread?._id]);
+
+  // Scroll to bottom on new messages, but only if we're already near the bottom
+  useEffect(() => {
+    // We should only auto-scroll if user is already near the bottom
+    // or if the new message is from the current user
+    const shouldScrollToBottom = () => {
+      if (!messagesEndRef.current) return false;
+      
+      // Get the message container element (parent of messagesEndRef)
+      const messageContainer = messagesEndRef.current.parentElement;
+      if (!messageContainer) return false;
+      
+      const { scrollTop, scrollHeight, clientHeight } = messageContainer;
+      
+      // Calculate distance from bottom
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      
+      // Get the last message and check if it's from current user
+      const lastMessage = messages[messages.length - 1];
+      const isLastMessageFromCurrentUser = lastMessage?.sender?._id === currentUserId;
+      
+      // Auto-scroll if user is already near the bottom (within 300px)
+      // or if the new message is from the current user (we just sent it)
+      return distanceFromBottom < 300 || isLastMessageFromCurrentUser;
+    };
+    
+    // Only scroll if appropriate
+    if (messages.length > 0 && shouldScrollToBottom()) {
+      scrollToBottom();
+    }
+  }, [messages, currentUserId]);
 
   // Setup socket listeners for typing indicators
   useEffect(() => {
@@ -204,183 +371,171 @@ const MessageThread = ({
       }
     });
 
-    // Cleanup listeners
+    // Mark thread as read when opened
+    if (thread._id) {
+      socketService.markThreadRead(thread._id);
+    }
+
     return () => {
-      socketService.removeListener('typing');
-      socketService.removeListener('typing-stopped');
+      setOtherUserTyping(false);
     };
   }, [thread, currentUserId]);
 
-  // Helper to get a date string for messages
+  // Format date for message groups
   const getMessageDate = (timestamp) => {
-    if (!timestamp) return 'Unknown';
-    const date = new Date(timestamp);
-    return date.toLocaleDateString();
+    if (!timestamp) return '';
+    return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
   };
-  
+
+  // Scroll to bottom of message list - make it smoother to prevent jumpy behavior
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    try {
+      if (messagesEndRef.current) {
+        // Create a smoother scroll behavior
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'end'
+        });
+      }
+    } catch (error) {
+      console.error('Error scrolling to bottom:', error);
+    }
   };
-  
-  const handleSendMessage = (messageText, attachments = []) => {
-    // Call the parent component's onSendMessage function with text and attachments
-    onSendMessage(messageText, attachments);
+
+  // Handle send message
+  const handleSendMessage = (messageText, attachments = [], replyToId = null) => {
+    onSendMessage(messageText, attachments, replyToId);
+    setReplyTo(null); // Clear reply state after sending
   };
-  
+
+  // Handle typing indicators
   const handleTypingStart = () => {
-    if (thread) {
+    if (thread?._id) {
       socketService.sendTyping(thread._id);
     }
   };
-  
+
   const handleTypingStop = () => {
-    if (thread) {
+    if (thread?._id) {
       socketService.sendTypingStopped(thread._id);
     }
   };
   
-  if (!thread) {
-    return (
-      <Paper sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Typography variant="body1" color="text.secondary">
-          Select a conversation to start messaging
-        </Typography>
-      </Paper>
-    );
-  }
+  // Handle reply to message
+  const handleReplyToMessage = (message) => {
+    setReplyTo(message);
+  };
   
+  // Handle cancel reply
+  const handleCancelReply = () => {
+    setReplyTo(null);
+  };
+
   return (
-    <Paper 
-      elevation={0} 
-      sx={{ 
-        height: '100%', 
-        display: 'flex', 
-        flexDirection: 'column',
-        bgcolor: darkMode ? 'background.default' : 'background.paper',
-        borderRadius: 0
-      }}
-    >
-      {/* Thread header */}
-      <AppBar 
-        position="static" 
-        color="default" 
-        elevation={0}
-        sx={{ 
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          bgcolor: darkMode ? 'background.paper' : 'background.default'
-        }}
-      >
-        <Toolbar>
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%', 
+      bgcolor: darkMode ? 'background.default' : 'grey.50'
+    }}>
+      {/* Header */}
+      <AppBar position="static" color="inherit" elevation={1}>
+        <Toolbar variant="dense">
           {isMobile && (
             <IconButton edge="start" color="inherit" onClick={onBack} sx={{ mr: 1 }}>
               <ArrowBackIcon />
             </IconButton>
           )}
+          
           <Avatar 
             src={otherUser?.profile?.profilePicture} 
-            alt={otherUser?.firstName}
-            sx={{ mr: 1 }}
-          >
-            {otherUser?.firstName?.charAt(0)}
-          </Avatar>
+            alt={otherUser?.firstName || "User"}
+            sx={{ width: 36, height: 36, mr: 1.5 }}
+          />
+          
           <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="subtitle1" noWrap>
+            <Typography variant="subtitle1">
               {otherUser?.firstName} {otherUser?.lastName}
             </Typography>
-            <Typography variant="body2" color="text.secondary" noWrap>
-              {otherUser?.profile?.title || 'User'}
-            </Typography>
+            
+            {otherUserTyping ? (
+              <Typography variant="caption" color="text.secondary">
+                Typing...
+              </Typography>
+            ) : (
+              <Typography variant="caption" color="text.secondary">
+                {otherUser?.userType === 'professional' ? 'Professional' : 'Seeker'}
+              </Typography>
+            )}
           </Box>
         </Toolbar>
       </AppBar>
-
-      {/* Messages area */}
+      
+      {/* Messages */}
       <Box 
+        id="message-thread-container"
+        ref={containerRef}
         sx={{ 
           flexGrow: 1, 
-          overflow: 'auto', 
-          p: 2,
-          bgcolor: darkMode ? 'background.default' : 'grey.100'
+          p: 2, 
+          overflowY: 'auto', 
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+        data-thread-id={thread?._id || 'no-thread'}
+        onScroll={() => {
+          // Save scroll position on manual scroll
+          if (thread?._id) {
+            saveScrollPosition('message-thread-container', thread._id);
+          }
         }}
       >
-        {loading && messages.length === 0 ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-            <CircularProgress size={30} />
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress />
           </Box>
         ) : error ? (
-          <Typography color="error" align="center" sx={{ p: 2 }}>
-            {error}
-          </Typography>
-        ) : (
-          // Direct render of messages without complex grouping
-          <Box>
-            {messages.map((message, index) => {
-              const isCurrentUser = message.sender?._id === currentUserId;
-              const showSender = !isCurrentUser && (index === 0 || 
-                  messages[index-1]?.sender?._id !== message.sender?._id);
-              
-              return (
-                <Box 
-                  key={message._id || message.tempId || `msg-${index}-${Date.now()}`}
-                  sx={{ 
-                    display: 'flex', 
-                    flexDirection: 'column',
-                    alignItems: isCurrentUser ? 'flex-end' : 'flex-start',
-                    mb: 2,
-                    mt: 1
-                  }}
-                >
-                  {/* Show sender name for messages not from current user */}
-                  {showSender && (
-                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1, mb: 0.5 }}>
-                      {message.sender?.firstName || 'User'} {message.sender?.lastName || ''}
-                    </Typography>
-                  )}
-                  
-                  {/* Message content */}
-                  <Message 
-                    message={message} 
-                    isCurrentUser={isCurrentUser}
-                    darkMode={darkMode}
-                  />
-                  
-                  {/* Message timestamp */}
-                  <Typography 
-                    variant="caption" 
-                    color="text.secondary" 
-                    sx={{ mt: 0.5, mx: 1 }}
-                  >
-                    {message.isLocal ? 'Sending...' : 
-                      formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
-                  </Typography>
-                </Box>
-              );
-            })}
-          </Box>
-        )}
-        
-        {/* Typing indicator */}
-        {otherUserTyping && (
-          <Box sx={{ display: 'flex', pl: 2, mb: 1 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-              {`${otherUser?.firstName || 'User'} is typing...`}
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Typography color="error">
+              {typeof error === 'string' ? error : 'An error occurred loading messages'}
             </Typography>
           </Box>
+        ) : messages.length === 0 ? (
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Typography color="textSecondary">
+              No messages yet. Start the conversation!
+            </Typography>
+          </Box>
+        ) : (
+          // Messages list
+          messages.map((message, index) => (
+            <Message 
+              key={message._id || `local-${index}`} 
+              message={message}
+              isCurrentUser={message.sender?._id === currentUserId}
+              darkMode={darkMode}
+              allMessages={messages}
+              onReply={handleReplyToMessage}
+            />
+          ))
         )}
         
-        {/* Element to scroll to */}
-        <div ref={messagesEndRef} />
+        {/* Invisible element to scroll to */}
+        <div ref={messagesEndRef} id="messages-end-ref" />
       </Box>
       
-      {/* Message input using MessageComposer component */}
-      <MessageComposer 
-        onSendMessage={handleSendMessage}
-        onTypingStart={handleTypingStart}
-        onTypingStop={handleTypingStop}
-        darkMode={darkMode}
-        placeholder="Type a message..."
-      />
-    </Paper>
+      {/* Composer */}
+      <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+        <MessageComposer 
+          onSendMessage={handleSendMessage}
+          onTypingStart={handleTypingStart}
+          onTypingStop={handleTypingStop}
+          darkMode={darkMode}
+          replyTo={replyTo}
+          onCancelReply={handleCancelReply}
+        />
+      </Box>
+    </Box>
   );
 };
 

@@ -12,7 +12,9 @@ import {
   ListItemIcon,
   Chip,
   Tooltip,
-  CircularProgress
+  CircularProgress,
+  Typography,
+  Collapse
 } from '@mui/material';
 import { 
   Send as SendIcon,
@@ -20,7 +22,9 @@ import {
   AttachFile as AttachIcon,
   Image as ImageIcon,
   Description as FileIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  Close as CloseIcon,
+  Reply as ReplyIcon
 } from '@mui/icons-material';
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
@@ -36,6 +40,8 @@ import fileService from '../../services/fileService';
  * @param {boolean} props.darkMode - Whether dark mode is enabled
  * @param {string} props.placeholder - Placeholder text for the input field
  * @param {Object} props.sx - Additional styles for the container
+ * @param {Object} props.replyTo - Message being replied to
+ * @param {Function} props.onCancelReply - Function to cancel replying to a message
  */
 const MessageComposer = ({ 
   onSendMessage, 
@@ -43,7 +49,9 @@ const MessageComposer = ({
   onTypingStop, 
   darkMode = false,
   placeholder = "Type a message...",
-  sx = {}
+  sx = {},
+  replyTo = null,
+  onCancelReply
 }) => {
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -55,16 +63,16 @@ const MessageComposer = ({
   const theme = useTheme();
 
   const handleMessageChange = (e) => {
-    const value = e.target.value;
+    const value = e.target.value || '';
     setMessage(value);
     
     // Handle typing indicator
     if (value && !isTyping) {
       setIsTyping(true);
-      if (onTypingStart) onTypingStart();
+      if (typeof onTypingStart === 'function') onTypingStart();
     } else if (!value && isTyping) {
       setIsTyping(false);
-      if (onTypingStop) onTypingStop();
+      if (typeof onTypingStop === 'function') onTypingStop();
     }
     
     // Clear previous timeout
@@ -76,7 +84,7 @@ const MessageComposer = ({
     if (value) {
       const timeoutId = setTimeout(() => {
         setIsTyping(false);
-        if (onTypingStop) onTypingStop();
+        if (typeof onTypingStop === 'function') onTypingStop();
       }, 3000);
       
       setTypingTimeoutId(timeoutId);
@@ -84,11 +92,15 @@ const MessageComposer = ({
   };
 
   const handleSendMessage = () => {
-    if (!message.trim() && attachments.length === 0) return;
+    if (!message.trim() && (!attachments || !Array.isArray(attachments) || attachments.length === 0)) return;
     
     // Call parent handler with message text and attachments
-    if (onSendMessage) {
-      onSendMessage(message.trim(), attachments);
+    if (typeof onSendMessage === 'function') {
+      onSendMessage(
+        message.trim(), 
+        Array.isArray(attachments) ? attachments : [],
+        replyTo ? replyTo._id : null // Pass the replyTo message ID
+      );
     }
     
     // Reset state
@@ -98,7 +110,12 @@ const MessageComposer = ({
     if (typingTimeoutId) {
       clearTimeout(typingTimeoutId);
     }
-    if (onTypingStop) onTypingStop();
+    if (typeof onTypingStop === 'function') onTypingStop();
+    
+    // Cancel reply mode if active
+    if (replyTo && typeof onCancelReply === 'function') {
+      onCancelReply();
+    }
   };
   
   const handleKeyDown = (e) => {
@@ -109,18 +126,20 @@ const MessageComposer = ({
   };
 
   const handleEmojiClick = (emoji) => {
-    setMessage(prev => prev + emoji.native);
+    if (!emoji) return;
+    
+    setMessage(prev => prev + (emoji.native || ''));
     setEmojiAnchorEl(null);
     
     // Trigger typing indicator when emoji is selected
     if (!isTyping) {
       setIsTyping(true);
-      if (onTypingStart) onTypingStart();
+      if (typeof onTypingStart === 'function') onTypingStart();
       
       // Set typing timeout
       const timeoutId = setTimeout(() => {
         setIsTyping(false);
-        if (onTypingStop) onTypingStop();
+        if (typeof onTypingStop === 'function') onTypingStop();
       }, 3000);
       
       setTypingTimeoutId(timeoutId);
@@ -140,6 +159,8 @@ const MessageComposer = ({
   };
 
   const handleFileChange = async (e) => {
+    if (!e || !e.target || !e.target.files) return;
+    
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
@@ -159,11 +180,11 @@ const MessageComposer = ({
               // Create a file metadata object
               resolve({
                 file,
-                id: uploadResult.filename || Date.now() + Math.random().toString(36).substring(2, 10),
+                id: uploadResult?.filename || Date.now() + Math.random().toString(36).substring(2, 10),
                 name: file.name,
                 type: file.type,
                 size: file.size,
-                url: uploadResult.url,
+                url: uploadResult?.url,
                 preview: file.type.startsWith('image/') ? reader.result : null
               });
             } catch (error) {
@@ -190,156 +211,262 @@ const MessageComposer = ({
       });
 
       const newAttachments = await Promise.all(filePromises);
-      setAttachments(prev => [...prev, ...newAttachments]);
+      setAttachments(prev => [...(Array.isArray(prev) ? prev : []), ...newAttachments]);
     } catch (error) {
       console.error('Error processing files:', error);
     } finally {
       setUploading(false);
-      // Reset the file input
-      e.target.value = null;
+      
+      // Reset the file input value to allow selecting the same file again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
   const removeAttachment = (id) => {
-    setAttachments(prev => prev.filter(attachment => attachment.id !== id));
+    setAttachments(prev => (Array.isArray(prev) ? prev : []).filter(attachment => attachment.id !== id));
   };
-
-  // Helper to format file size
+  
   const formatFileSize = (bytes) => {
     if (bytes < 1024) return bytes + ' B';
     else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-    else return (bytes / 1048576).toFixed(1) + ' MB';
+    else if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+    else return (bytes / 1073741824).toFixed(1) + ' GB';
   };
-  
+
+  // Function to handle canceling a reply
+  const handleCancelReply = () => {
+    if (typeof onCancelReply === 'function') {
+      onCancelReply();
+    }
+  };
+
   return (
-    <Paper
-      elevation={0}
+    <Box 
       sx={{ 
-        p: 2,
-        borderTop: `1px solid ${theme.palette.divider}`,
-        bgcolor: darkMode ? 'background.paper' : 'background.default',
-        ...sx
+        display: 'flex', 
+        flexDirection: 'column', 
+        width: '100%',
+        ...(sx || {})
       }}
     >
-      {/* Attachments preview */}
-      {attachments.length > 0 && (
-        <List dense sx={{ mt: -1, mb: 1 }}>
-          {attachments.map(attachment => (
-            <ListItem 
-              key={attachment.id}
-              secondaryAction={
-                <IconButton edge="end" size="small" onClick={() => removeAttachment(attachment.id)}>
-                  <CancelIcon fontSize="small" />
-                </IconButton>
-              }
+      {/* Reply Preview */}
+      <Collapse in={!!replyTo}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            p: 1,
+            mb: 1,
+            backgroundColor: darkMode ? 'rgba(55, 65, 81, 0.2)' : 'rgba(229, 231, 235, 0.5)',
+            borderRadius: 1,
+            border: `1px solid ${darkMode ? 'rgba(75, 85, 99, 0.5)' : 'rgba(209, 213, 219, 0.8)'}`,
+            maxWidth: '100%'
+          }}
+        >
+          <ReplyIcon sx={{ mr: 1, color: darkMode ? 'primary.light' : 'primary.main', fontSize: 18 }} />
+          <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+            <Typography variant="caption" sx={{ fontWeight: 'bold', color: darkMode ? 'primary.light' : 'primary.main' }}>
+              Replying to {replyTo?.sender?.firstName || 'User'}
+            </Typography>
+            <Typography 
+              variant="body2" 
               sx={{ 
-                py: 0.5,
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                mb: 1
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                opacity: 0.9,
+                fontSize: '0.8rem'
               }}
             >
-              <ListItemIcon sx={{ minWidth: 36 }}>
-                {attachment.type.startsWith('image/') ? 
-                  <ImageIcon color="primary" fontSize="small" /> : 
-                  <FileIcon color="secondary" fontSize="small" />
-                }
-              </ListItemIcon>
-              <ListItemText 
-                primary={attachment.name} 
-                secondary={formatFileSize(attachment.size)}
-                primaryTypographyProps={{ variant: 'body2', noWrap: true }}
-                secondaryTypographyProps={{ variant: 'caption' }}
-              />
-            </ListItem>
-          ))}
-        </List>
-      )}
-      
-      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-        <Tooltip title="Add emoji">
-          <IconButton size="small" sx={{ mr: 1 }} onClick={handleOpenEmojiPicker}>
-            <EmojiIcon fontSize="small" />
+              {replyTo?.content}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={handleCancelReply}>
+            <CloseIcon sx={{ fontSize: 16 }} />
           </IconButton>
-        </Tooltip>
+        </Box>
+      </Collapse>
 
-        <Tooltip title="Attach file">
-          <IconButton 
-            size="small" 
-            sx={{ mr: 1 }} 
-            onClick={handleFileAttachment}
-            disabled={uploading}
-          >
-            {uploading ? <CircularProgress size={20} /> : <AttachIcon fontSize="small" />}
-          </IconButton>
+      {/* Attachments Preview */}
+      {Array.isArray(attachments) && attachments.length > 0 && (
+        <Paper 
+          elevation={0} 
+          sx={{ 
+            p: 1, 
+            mb: 1, 
+            border: `1px solid ${darkMode ? 'rgba(55, 65, 81, 0.3)' : 'rgba(229, 231, 235, 0.8)'}`,
+            backgroundColor: darkMode ? 'rgba(17, 24, 39, 0.3)' : 'rgba(243, 244, 246, 0.5)',
+            borderRadius: 1
+          }}
+        >
+          <List dense sx={{ py: 0 }}>
+            {attachments.map((attachment) => (
+              <ListItem 
+                key={attachment.id}
+                secondaryAction={
+                  <IconButton edge="end" onClick={() => removeAttachment(attachment.id)} size="small">
+                    <CancelIcon fontSize="small" />
+                  </IconButton>
+                }
+                sx={{ py: 0.5 }}
+              >
+                <ListItemIcon sx={{ minWidth: 32 }}>
+                  {attachment.type.startsWith('image/') ? 
+                    <ImageIcon fontSize="small" color="primary" /> : 
+                    <FileIcon fontSize="small" color="primary" />
+                  }
+                </ListItemIcon>
+                <ListItemText 
+                  primary={attachment.name}
+                  secondary={formatFileSize(attachment.size)}
+                  primaryTypographyProps={{ 
+                    variant: 'body2',
+                    noWrap: true,
+                    sx: { maxWidth: '200px' }
+                  }}
+                  secondaryTypographyProps={{ 
+                    variant: 'caption',
+                    color: 'text.secondary'
+                  }}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+      )}
+
+      {/* Message Input */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          backgroundColor: darkMode ? 'rgba(31, 41, 55, 0.8)' : 'white',
+          borderRadius: '24px',
+          border: `1px solid ${darkMode ? 'rgba(75, 85, 99, 0.4)' : 'rgba(229, 231, 235, 0.8)'}`,
+          p: '2px',
+          px: 1.5,
+          position: 'relative',
+          width: '100%'
+        }}
+      >
+        {/* Emoji Picker */}
+        <IconButton 
+          onClick={handleOpenEmojiPicker}
+          sx={{ 
+            p: 1,
+            mr: 0.5,
+            color: darkMode ? 'rgba(156, 163, 175, 0.8)' : 'rgba(107, 114, 128, 0.8)'
+          }}
+          size="small"
+        >
+          <EmojiIcon fontSize="small" />
+        </IconButton>
+        
+        <Popover
+          open={Boolean(emojiAnchorEl)}
+          anchorEl={emojiAnchorEl}
+          onClose={handleCloseEmojiPicker}
+          anchorOrigin={{
+            vertical: 'top',
+            horizontal: 'center',
+          }}
+          transformOrigin={{
+            vertical: 'bottom',
+            horizontal: 'center',
+          }}
+          PaperProps={{
+            elevation: 3,
+            sx: { 
+              mt: -1,
+              // Ensure the picker always appears on top
+              zIndex: theme.zIndex.modal + 1
+            }
+          }}
+        >
+          <Picker 
+            data={data}
+            onEmojiSelect={handleEmojiClick}
+            theme={darkMode ? 'dark' : 'light'}
+            previewPosition="none"
+            skinTonePosition="none"
+          />
+        </Popover>
+        
+        {/* File Attachment Button */}
+        <Tooltip title="Attach files" arrow>
+          <span>
+            <IconButton 
+              onClick={handleFileAttachment}
+              sx={{ 
+                p: 1,
+                mr: 0.5,
+                color: darkMode ? 'rgba(156, 163, 175, 0.8)' : 'rgba(107, 114, 128, 0.8)'
+              }}
+              size="small"
+              disabled={uploading}
+            >
+              {uploading ? (
+                <CircularProgress size={18} thickness={5} />
+              ) : (
+                <AttachIcon fontSize="small" />
+              )}
+            </IconButton>
+          </span>
         </Tooltip>
         
         {/* Hidden file input */}
         <input
           type="file"
           ref={fileInputRef}
-          multiple
           onChange={handleFileChange}
           style={{ display: 'none' }}
+          multiple
         />
         
+        {/* Message Input TextField */}
         <TextField
           fullWidth
-          placeholder={placeholder}
           multiline
-          maxRows={4}
+          maxRows={6}
+          variant="standard"
+          placeholder={placeholder}
           value={message}
           onChange={handleMessageChange}
           onKeyDown={handleKeyDown}
-          variant="outlined"
-          size="small"
-          sx={{ mr: 1 }}
+          InputProps={{
+            disableUnderline: true,
+            sx: {
+              px: 1,
+              py: 0.5,
+              fontSize: '0.9rem',
+              color: darkMode ? 'rgba(243, 244, 246, 0.9)' : 'inherit'
+            }
+          }}
+          inputProps={{
+            style: {
+              resize: 'none',
+            }
+          }}
         />
         
-        <Tooltip title="Send message">
+        {/* Send Button */}
+        <Tooltip title="Send message" arrow>
           <span>
             <IconButton 
               onClick={handleSendMessage}
-              disabled={!message.trim() && attachments.length === 0}
-              sx={{
-                bgcolor: (message.trim() || attachments.length > 0) ? 'primary.main' : 'grey.300',
-                color: (message.trim() || attachments.length > 0) ? 'white' : 'grey.500',
-                '&:hover': {
-                  bgcolor: (message.trim() || attachments.length > 0) ? 'primary.dark' : 'grey.300',
-                },
-                width: 40,
-                height: 40
-              }}
+              color="primary"
+              sx={{ p: 1, ml: 0.5 }}
+              size="small"
+              disabled={(!message.trim() && attachments.length === 0) || uploading}
             >
-              <SendIcon />
+              <SendIcon fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>
       </Box>
-
-      {/* Emoji Picker */}
-      <Popover
-        open={Boolean(emojiAnchorEl)}
-        anchorEl={emojiAnchorEl}
-        onClose={handleCloseEmojiPicker}
-        anchorOrigin={{
-          vertical: 'top',
-          horizontal: 'left',
-        }}
-        transformOrigin={{
-          vertical: 'bottom',
-          horizontal: 'left',
-        }}
-      >
-        <Picker 
-          data={data} 
-          onEmojiSelect={handleEmojiClick}
-          theme={darkMode ? 'dark' : 'light'} 
-          set="native"
-        />
-      </Popover>
-    </Paper>
+    </Box>
   );
 };
 

@@ -74,12 +74,13 @@ npm start
 ## Documentation
 
 All project documentation is now centralized in the `project_documentation` folder:
-
 - **Product Requirements**: [project_documentation/handshake-product-requirements.md](./project_documentation/handshake-product-requirements.md)
-- **UI/UX Design**: [project_documentation/handshake-software-specifications.md](./project_documentation/handshake-software-specifications.md)
-- **Technical Architecture**: [project_documentation/handshake-ux-design.md](./project_documentation/handshake-ux-design.md)
+- **UI/UX Design**: [project_documentation/handshake-ux-design.md](./project_documentation/handshake-ux-design.md)
+- **Technical Architecture**: [project_documentation/technical-architecture.md](./project_documentation/technical-architecture.md)
 - **API Routes**: [project_documentation/API_ROUTES.md](./project_documentation/API_ROUTES.md)
+- **Socket Events**: [project_documentation/SOCKET_EVENTS.md](./project_documentation/SOCKET_EVENTS.md)
 - **Database Schema**: [project_documentation/DATABASE_SCHEMA.md](./project_documentation/DATABASE_SCHEMA.md)
+- **Invitation Flow**: [project_documentation/INVITATION_FLOW.md](./project_documentation/INVITATION_FLOW.md)
 
 For development conventions, please refer to:
 - [project-rules.md](./project-rules.md) - Coding standards and conventions

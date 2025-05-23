@@ -40,6 +40,14 @@ const invitationSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Thread'
   },
+  removedByProfessional: {
+    type: Boolean,
+    default: false
+  },
+  chatUnlocked: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now

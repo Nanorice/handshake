@@ -4,11 +4,12 @@ import userService from './userService';
 import socketService from './socketService';
 import { getApiBaseUrl } from '../utils/apiConfig';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// Use getApiBaseUrl to get the correct API URL with /api prefix
+const API_URL = getApiBaseUrl();
 
 // Create axios instance with auth header
 const authAxios = axios.create({
-  baseURL: `${API_URL}/messages`,
+  baseURL: API_URL + '/messages',
   headers: {
     'Content-Type': 'application/json'
   }
@@ -17,13 +18,65 @@ const authAxios = axios.create({
 // Add authorization header to every request
 authAxios.interceptors.request.use(
   (config) => {
+    // Get a fresh token for each request to ensure we have the latest
     const token = getAuthToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log(`Adding auth token to request: ${token.substring(0, 10)}...`);
+    } else {
+      console.warn('No auth token available for request');
+      
+      // Instead of throwing an error, redirect to login page if in a browser environment
+      if (typeof window !== 'undefined') {
+        console.log('Redirecting to login page due to missing authentication');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
+      }
+      
+      // Still throw error to prevent further execution
+      throw new Error('Authentication required');
     }
+    
+    // Log the full URL being requested for debugging
+    console.log(`Requesting: ${config.baseURL}${config.url}`);
     return config;
   },
   (error) => {
+    console.error('Request interceptor error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor to handle auth errors
+authAxios.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    // Handle 401/403 errors specifically
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      console.error('Authentication error in messageService:', error.response.status);
+      
+      // Clear any invalid auth data
+      localStorage.removeItem('token');
+      
+      // Redirect to login page if in a browser environment
+      if (typeof window !== 'undefined') {
+        console.log('Redirecting to login page due to authentication failure');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
+      }
+      
+      // Fall back to local storage for data in the meantime
+      console.log('Falling back to local storage for messaging data');
+      
+      // Create a custom error with fallback flag to trigger localStorage fallback
+      const customError = new Error('Authentication required');
+      customError.requiresFallback = true;
+      return Promise.reject(customError);
+    }
     return Promise.reject(error);
   }
 );
@@ -112,235 +165,189 @@ const initializeDbIfNeeded = async () => {
 // Get threads for the current user
 const getThreads = async () => {
   try {
-    // Try the real API first
+    // Check if we have a valid token first
+    const token = getAuthToken();
+    if (!token) {
+      console.error('Cannot fetch threads: No valid authentication token');
+      return [];
+    }
+    
+    // Try the real API with valid token
     const response = await authAxios.get('/threads');
+    
+    if (!response?.data?.data) {
+      console.warn('API returned invalid data format for threads');
+      throw new Error('Invalid API response format');
+    }
+    
     console.log('Successfully retrieved threads from API');
-    return response.data.data.threads;
+    
+    // Ensure we always return an array
+    const threads = response.data.data.threads;
+    if (!Array.isArray(threads)) {
+      console.warn('API returned non-array for threads:', threads);
+      return [];
+    }
+    
+    return threads;
   } catch (error) {
-    console.error('Error fetching threads from API, falling back to local storage:', error);
-    
-    // Get the current user ID
-    const currentUserId = getCurrentUserId();
-    
-    // Initialize database if needed
-    const { threads } = await initializeDbIfNeeded();
-    
-    // Filter threads for the current user (they should be a participant)
-    const userThreads = threads.filter(thread => 
-      thread.participants.includes(currentUserId)
-    );
-    
-    console.log(`Found ${userThreads.length} threads for user ${currentUserId}`);
-    
-    // Get other participant details for each thread
-    await Promise.all(userThreads.map(async (thread) => {
-      if (!thread.otherParticipant) {
-        const otherUserId = thread.participants.find(p => p !== currentUserId);
-        if (otherUserId) {
-          try {
-            const testUsers = await userService.getTestUsers();
-            const otherUser = testUsers.find(user => user._id === otherUserId);
-            if (otherUser) {
-              thread.otherParticipant = otherUser;
-            }
-          } catch (err) {
-            console.error('Error getting user details:', err);
+    console.error('Error fetching threads:', error);
+    return [];
+  }
+};
+
+// Get threads from local storage (for fallback)
+const getLocalThreads = async () => {
+  // Get the current user ID
+  const currentUserId = getCurrentUserId();
+  
+  // Initialize database if needed
+  const { threads } = await initializeDbIfNeeded();
+  
+  // Filter threads for the current user (they should be a participant)
+  const userThreads = threads.filter(thread => 
+    thread.participants.includes(currentUserId)
+  );
+  
+  console.log(`Found ${userThreads.length} threads for user ${currentUserId}`);
+  
+  // Get other participant details for each thread
+  await Promise.all(userThreads.map(async (thread) => {
+    if (!thread.otherParticipant) {
+      const otherUserId = thread.participants.find(p => p !== currentUserId);
+      if (otherUserId) {
+        try {
+          const testUsers = await userService.getTestUsers();
+          const otherUser = testUsers.find(user => user._id === otherUserId);
+          if (otherUser) {
+            thread.otherParticipant = otherUser;
           }
+        } catch (err) {
+          console.error('Error getting user details:', err);
         }
       }
-    }));
-    
-    return userThreads;
-  }
+    }
+  }));
+  
+  return userThreads;
 };
 
 // Get messages for a specific thread
 const getMessages = async (threadId) => {
+  if (!threadId) {
+    console.error('Invalid thread ID provided to getMessages');
+    return []; // Return empty array directly for consistency
+  }
+
   try {
+    // Use the correct endpoint for fetching messages
+    console.log(`[messageService] Getting messages for thread ${threadId} at /threads/${threadId}`);
     const response = await authAxios.get(`/threads/${threadId}`);
-    return response.data.data;
-  } catch (error) {
-    console.error('Error fetching messages from API, falling back to local storage:', error);
     
-    // Initialize database if needed
-    const { threads, messages } = await initializeDbIfNeeded();
-    
-    // Check both storage locations for messages
-    
-    // First check the primary messages object
-    const threadMessages = messages[threadId] || [];
-    
-    // Then check the per-thread storage used for cross-user communication
-    let additionalMessages = [];
-    try {
-      const storageKey = `messages_${threadId}`;
-      const existingMessages = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      additionalMessages = existingMessages;
-      console.log('Retrieved additional messages from per-thread storage:', additionalMessages.length);
-    } catch (err) {
-      console.error('Error retrieving messages from per-thread storage:', err);
+    // Check if response.data has the messages array
+    if (response?.data?.data?.messages) {
+      console.log(`[messageService] Successfully fetched messages for thread ${threadId}:`, response.data.data.messages);
+      return response.data.data.messages;
+    } else if (response?.data?.messages) {
+      console.log(`[messageService] Successfully fetched messages (response.data.messages) for thread ${threadId}:`, response.data.messages);
+      return response.data.messages;
+    } else if (response?.data && Array.isArray(response.data)) {
+      console.log(`[messageService] Successfully fetched messages (response.data is array) for thread ${threadId}:`, response.data);
+      return response.data;
+    } else {
+      console.warn('[messageService] API returned invalid data format for messages. Response data:', response?.data);
+      return []; // Return empty array on failure
     }
-    
-    // Combine both message sources
-    const allMessages = [...threadMessages, ...additionalMessages];
-    
-    // Filter out duplicates (based on _id)
-    const uniqueMessages = [];
-    const seenIds = new Set();
-    
-    allMessages.forEach(msg => {
-      if (msg._id && !seenIds.has(msg._id)) {
-        seenIds.add(msg._id);
-        uniqueMessages.push(msg);
-      } else if (!msg._id) {
-        // Include messages with no _id (rare case)
-        uniqueMessages.push(msg);
-      }
-    });
-    
-    // Sort messages by timestamp
-    uniqueMessages.sort((a, b) => 
-      new Date(a.createdAt) - new Date(b.createdAt)
-    );
-    
-    console.log(`Retrieved ${uniqueMessages.length} messages for thread ${threadId}`);
-    
-    // Find thread for return
-    const thread = threads.find(t => t._id === threadId);
-    
-    return { messages: uniqueMessages, thread };
+  } catch (error) {
+    console.error(`[messageService] Error fetching messages for thread ${threadId}:`, error);
+    // Check if it's a CORS preflight error or other network issue
+    if (error.isAxiosError && !error.response) {
+      console.error('[messageService] Network error or CORS issue suspected.');
+    }
+    return []; // Return empty array on error
   }
 };
 
-// Send a message to a thread
-const sendMessage = async (threadId, content, attachments = []) => {
+/**
+ * Send a message in a thread
+ * @param {string} threadId - ID of the thread
+ * @param {string} content - Text content of the message
+ * @param {Array} attachments - Optional file attachments
+ * @param {string} replyToId - Optional ID of the message being replied to
+ * @returns {Promise<Object>} - The sent message
+ */
+const sendMessage = async (threadId, content, attachments = [], replyToId = null) => {
+  if (!threadId) {
+    console.error('Invalid thread ID');
+    return null;
+  }
+
   try {
-    // Improved thread ID format detection
-    // MongoDB ObjectIDs are typically 24 hex characters
-    const isMongoId = /^[0-9a-f]{24}$/i.test(threadId);
-    const isLocalThread = threadId.includes('thread_') || threadId.includes('_');
+    const messageData = { content };
     
-    console.log(`Thread ID format check: ${threadId}, isMongoId: ${isMongoId}, isLocalThread: ${isLocalThread}`);
-    
-    // Try to use MongoDB if it seems like a MongoDB ID
-    if (isMongoId) {
-      try {
-        console.log('Attempting to use MongoDB API for this thread ID');
-        const response = await authAxios.post(`/threads/${threadId}`, {
-          content,
-          attachments,
-          messageType: attachments.length > 0 ? 'mixed' : 'text'
-        });
-        console.log('Successfully sent message via MongoDB API');
-        return response.data.data.message;
-      } catch (apiError) {
-        console.error('API call failed despite having MongoDB ID format:', apiError);
-        throw new Error('API call failed, falling back to localStorage');
-      }
-    } else {
-      // This is definitely a localStorage thread
-      console.log('Using local storage for this thread (non-MongoDB ID format)');
-      throw new Error('Using local storage for this thread');
+    // Add replyToId if replying to a message
+    if (replyToId) {
+      messageData.replyToId = replyToId;
+      messageData.messageType = 'reply';
     }
+    
+    // Add file data if attachments present
+    if (attachments && attachments.length > 0) {
+      const firstAttachment = attachments[0];
+      messageData.file = {
+        fileName: firstAttachment.name,
+        fileType: firstAttachment.type,
+        fileSize: firstAttachment.size,
+        filePath: firstAttachment.url || ''
+      };
+      messageData.messageType = 'file';
+    }
+    
+    // Send the message to the backend
+    const response = await authAxios.post(`/threads/${threadId}`, messageData);
+    
+    if (response.data && response.data.status === 'success') {
+      return response.data.data.message;
+    }
+    
+    return null;
   } catch (error) {
-    console.error('Using local storage for messaging:', error.message);
+    console.error('Error sending message:', error);
     
-    // Get current database
-    const { threads, messages } = await initializeDbIfNeeded();
-    
-    // Find the thread
-    const threadIndex = threads.findIndex(t => t._id === threadId);
-    if (threadIndex === -1) {
-      console.error(`Thread not found: ${threadId}`);
-      throw new Error('Thread not found');
-    }
-    
-    // Get current user info
-    const currentUserId = getCurrentUserId();
-    
-    // Create a new message
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-    const now = new Date().toISOString();
-    
-    // Get user data for better display
-    const userData = JSON.parse(localStorage.getItem('userData')) || {};
-    
-    const newMessage = {
-      _id: messageId,
-      threadId: threadId,
-      content: content,
-      sender: { 
-        _id: currentUserId,
-        firstName: userData.firstName || 'User',
-        lastName: userData.lastName || ''
-      },
-      messageType: attachments.length > 0 ? 'mixed' : 'text',
-      attachments,
-      createdAt: now,
-      isRead: false
-    };
-    
-    // Add message to the thread's messages
-    if (!messages[threadId]) {
-      messages[threadId] = [];
-    }
-    messages[threadId].push(newMessage);
-    
-    // Update the thread's last message info
-    threads[threadIndex].lastMessage = {
-      content: content,
-      sender: currentUserId,
-      timestamp: now,
-      messageType: attachments.length > 0 ? 'mixed' : 'text'
-    };
-    threads[threadIndex].updatedAt = now;
-    
-    // Update unread count for the other participant
-    const otherParticipantId = threads[threadIndex].participants.find(
-      id => id !== currentUserId
-    );
-    
-    // If we're not the other participant, increment their unread count
-    if (currentUserId !== otherParticipantId) {
-      // Make sure unreadCount is an object
-      if (typeof threads[threadIndex].unreadCount === 'number') {
-        // Convert from number to object format
-        const currentCount = threads[threadIndex].unreadCount || 0;
-        threads[threadIndex].unreadCount = {};
-        threads[threadIndex].unreadCount[otherParticipantId] = currentCount;
-      } else if (!threads[threadIndex].unreadCount) {
-        // Initialize if it doesn't exist
-        threads[threadIndex].unreadCount = {};
-      }
-      
-      // Now increment the count for the other participant
-      threads[threadIndex].unreadCount[otherParticipantId] = 
-        (threads[threadIndex].unreadCount[otherParticipantId] || 0) + 1;
-    }
-    
-    // Save updated database
-    saveDatabase(threads, messages);
-    
-    // Also save to the per-thread message storage for cross-user communication
+    // Use socket.io as fallback if HTTP request fails
     try {
-      const storageKey = `messages_${threadId}`;
-      const existingMessages = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      existingMessages.push(newMessage);
-      localStorage.setItem(storageKey, JSON.stringify(existingMessages));
-    } catch (err) {
-      console.error('Error saving to per-thread storage:', err);
+      socketService.sendMessage(threadId, {
+        content,
+        replyToId,
+        messageType: replyToId ? 'reply' : (attachments.length > 0 ? 'file' : 'text'),
+        file: attachments.length > 0 ? {
+          fileName: attachments[0].name,
+          fileType: attachments[0].type,
+          fileSize: attachments[0].size,
+          filePath: attachments[0].url || ''
+        } : null
+      });
+      
+      return {
+        _id: `temp-${Date.now()}`,
+        threadId,
+        content,
+        sender: { _id: getCurrentUserId() },
+        createdAt: new Date().toISOString(),
+        replyTo: replyToId,
+        messageType: replyToId ? 'reply' : (attachments.length > 0 ? 'file' : 'text'),
+        file: attachments.length > 0 ? {
+          fileName: attachments[0].name,
+          fileType: attachments[0].type,
+          fileSize: attachments[0].size,
+          filePath: attachments[0].url || ''
+        } : null,
+        isLocal: true
+      };
+    } catch (socketError) {
+      console.error('Socket fallback failed:', socketError);
+      return null;
     }
-    
-    // Use socket to broadcast message to other users
-    socketService.sendMessage(threadId, newMessage);
-    
-    console.log('Message saved to local storage:', {
-      threadId,
-      messageId,
-      content: content.substring(0, 20) + (content.length > 20 ? '...' : '')
-    });
-    
-    return newMessage;
   }
 };
 
@@ -559,13 +566,15 @@ const archiveThread = async (threadId) => {
   }
 };
 
+// Export message service methods
 const messageService = {
   getThreads,
   getMessages,
   sendMessage,
   createThread,
   markThreadAsRead,
-  archiveThread
+  archiveThread,
+  getLocalThreads
 };
 
 export default messageService; 

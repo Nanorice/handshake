@@ -3,20 +3,10 @@ import {
   Container,
   Typography,
   Grid,
-  Card,
-  CardContent,
-  CardActions,
   Button,
-  Chip,
   Box,
   Tabs,
   Tab,
-  Avatar,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Divider,
   Breadcrumbs,
   Link as MuiLink,
   Dialog,
@@ -26,16 +16,15 @@ import {
   Rating,
   TextField,
   Alert,
-  Paper,
   CircularProgress
 } from '@mui/material';
-import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import CoffeeChatCard from '../components/CoffeeChat/CoffeeChatCard';
 import InfoIcon from '@mui/icons-material/Info';
 import EventIcon from '@mui/icons-material/Event';
 import axios from 'axios';
 import { getApiBaseUrl } from '../utils/apiConfig';
+import { getMyInvitations, unlockInvitationChat, getInvitationChatThread } from '../services/invitationService';
 
 // Define API_URL with explicit port 5000 to match the server
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -66,6 +55,7 @@ const CoffeeChats = () => {
   // State
   const [tabValue, setTabValue] = useState(0);
   const [coffeeChats, setCoffeeChats] = useState([]);
+  const [invitationChats, setInvitationChats] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState(null);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
@@ -73,6 +63,13 @@ const CoffeeChats = () => {
   const [reviewData, setReviewData] = useState({
     rating: 5,
     comment: ''
+  });
+  const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
+  const [currentInvitationId, setCurrentInvitationId] = useState(null);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [chatUnlockStatus, setChatUnlockStatus] = useState({
+    success: false,
+    error: null
   });
 
   // Fetch coffee chats from API
@@ -106,6 +103,9 @@ const CoffeeChats = () => {
         } else {
           setCoffeeChats([]);
         }
+        
+        // Fetch invitation-based chats
+        await fetchInvitationBasedChats();
       } catch (error) {
         console.error('Error fetching coffee chats:', error);
         setApiError(
@@ -121,6 +121,41 @@ const CoffeeChats = () => {
 
     fetchCoffeeChats();
   }, []);
+  
+  // Fetch invitation-based coffee chats
+  const fetchInvitationBasedChats = async () => {
+    try {
+      // Get all completed/accepted invitations
+      const result = await getMyInvitations({ status: 'accepted' });
+      
+      if (result.success && result.data) {
+        // Transform invitations to coffee chat format
+        const chats = result.data.invitations.map(invitation => ({
+          id: invitation._id, // Use invitation ID as the chat ID
+          invitationId: invitation._id, // Store original invitation ID
+          status: invitation.status === 'accepted' ? 'completed' : invitation.status,
+          scheduledAt: invitation.sessionDetails?.proposedDate,
+          duration: invitation.sessionDetails?.duration || 30,
+          price: 0, // Invitations don't have a price in this context
+          professional: {
+            firstName: invitation.sender?.firstName || invitation.receiver?.firstName,
+            lastName: invitation.sender?.lastName || invitation.receiver?.lastName,
+            profileImage: invitation.sender?.profileImage || invitation.receiver?.profileImage,
+            title: invitation.sender?.title || invitation.receiver?.title,
+            company: invitation.sender?.company || invitation.receiver?.company
+          },
+          topics: [invitation.sessionDetails?.topic] || ['Coffee Chat'],
+          meetingLink: invitation.meetingLink || null,
+          hasReview: !!invitation.hasReview,
+          chatUnlocked: !!invitation.chatUnlocked
+        }));
+        
+        setInvitationChats(chats);
+      }
+    } catch (error) {
+      console.error('Error fetching invitation-based chats:', error);
+    }
+  };
 
   // Handle tab change
   const handleTabChange = (event, newValue) => {
@@ -176,6 +211,15 @@ const CoffeeChats = () => {
               : chat
           )
         );
+        
+        // Also update invitation chats if applicable
+        setInvitationChats(prev => 
+          prev.map(chat => 
+            chat.id === currentChatId 
+              ? { ...chat, hasReview: true } 
+              : chat
+          )
+        );
       }
       
       // Close the dialog and reset the form
@@ -187,52 +231,87 @@ const CoffeeChats = () => {
       alert('Failed to submit review. Please try again.');
     }
   };
+  
+  // Open unlock chat dialog
+  const handleUnlockChat = (invitationId) => {
+    setCurrentInvitationId(invitationId);
+    setChatUnlockStatus({ success: false, error: null });
+    setUnlockDialogOpen(true);
+  };
+  
+  // Process chat unlock
+  const handleProcessUnlock = async () => {
+    if (!currentInvitationId) return;
+    
+    setPaymentProcessing(true);
+    
+    try {
+      const result = await unlockInvitationChat(currentInvitationId);
+      
+      if (result.success) {
+        setChatUnlockStatus({ 
+          success: true, 
+          error: null 
+        });
+        
+        // Update the invitation chat in state
+        setInvitationChats(prev => 
+          prev.map(chat => 
+            chat.invitationId === currentInvitationId 
+              ? { ...chat, chatUnlocked: true } 
+              : chat
+          )
+        );
+        
+        // Close dialog after 2 seconds
+        setTimeout(() => {
+          setUnlockDialogOpen(false);
+          setCurrentInvitationId(null);
+          setPaymentProcessing(false);
+        }, 2000);
+      } else {
+        throw new Error(result.message || 'Failed to unlock chat');
+      }
+    } catch (error) {
+      console.error('Error unlocking chat:', error);
+      setChatUnlockStatus({
+        success: false,
+        error: error.message || 'Failed to process payment. Please try again.'
+      });
+      setPaymentProcessing(false);
+    }
+  };
+  
+  // Open chat for an invitation
+  const handleOpenChat = async (invitationId) => {
+    try {
+      const result = await getInvitationChatThread(invitationId);
+      
+      if (result.success && result.data.threadId) {
+        // Navigate to chat with the thread ID
+        window.location.href = `/messaging?thread=${result.data.threadId}`;
+      } else {
+        throw new Error(result.message || 'Could not find chat thread');
+      }
+    } catch (error) {
+      console.error('Error opening chat:', error);
+      alert('Could not open chat. Please try again.');
+    }
+  };
 
   // Filter chats by status
-  const upcomingChats = coffeeChats.filter(
+  const upcomingChats = [...coffeeChats, ...invitationChats].filter(
     chat => ['pending', 'confirmed'].includes(chat.status)
   );
   
-  const pastChats = coffeeChats.filter(
+  const pastChats = [...coffeeChats, ...invitationChats].filter(
     chat => ['completed', 'cancelled'].includes(chat.status)
   );
 
   // Handle coffee chat actions
-  const handleCancelChat = async (chatId) => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-      
-      const response = await axios.put(`${API_URL}/sessions/${chatId}/status`, 
-        { status: 'cancelled' },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-      
-      if (response.data && response.data.success) {
-        // Update the local state to reflect the change
-        setCoffeeChats(prev => 
-          prev.map(chat => 
-            chat.id === chatId 
-              ? { ...chat, status: 'cancelled' } 
-              : chat
-          )
-        );
-      }
-    } catch (error) {
-      console.error('Error cancelling chat:', error);
-      alert('Failed to cancel the session. Please try again.');
-    }
-  };
-
   const handleRescheduleChat = (chatId) => {
-    // This would open a reschedule dialog in a real app
-    alert('Reschedule functionality is not yet implemented');
+    // Implementation for reschedule
+    console.log('Reschedule chat', chatId);
   };
 
   const handleJoinMeeting = (link) => {
@@ -258,167 +337,193 @@ const CoffeeChats = () => {
           Your Coffee Chats
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Manage your scheduled coffee chats and view past sessions.
+          Manage your upcoming and past coffee chat sessions
         </Typography>
       </Box>
-      
-      {/* Information Alert */}
-      <Alert 
-        severity="info" 
-        icon={<InfoIcon />}
-        sx={{ mb: 3, display: 'flex', alignItems: 'center' }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <EventIcon sx={{ mr: 1 }} />
-          <Typography variant="body2">
-            <strong>This is your schedule history page.</strong> When you confirm a time slot from the matches page, 
-            your scheduled coffee chats will appear here. You can track all your upcoming and past meetings in one place.
-          </Typography>
-        </Box>
-      </Alert>
-      
-      {/* API Error Alert */}
-      {apiError && (
-        <Alert 
-          severity="error" 
-          sx={{ mb: 3 }}
-        >
-          {apiError}
-        </Alert>
-      )}
-      
-      {/* Tab Navigation */}
+
+      {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs 
-          value={tabValue} 
+        <Tabs
+          value={tabValue}
           onChange={handleTabChange}
           aria-label="coffee chat tabs"
         >
-          <Tab label={`Upcoming (${upcomingChats.length})`} />
-          <Tab label={`Past (${pastChats.length})`} />
+          <Tab label="Upcoming Sessions" id="coffee-chat-tab-0" />
+          <Tab label="Past Sessions" id="coffee-chat-tab-1" />
         </Tabs>
       </Box>
-      
-      {/* Upcoming Coffee Chats Tab */}
+
+      {/* Loading/Error State */}
+      {isLoading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress />
+        </Box>
+      )}
+
+      {apiError && !isLoading && (
+        <Alert severity="warning" sx={{ my: 4 }}>
+          {apiError}
+        </Alert>
+      )}
+
+      {/* Upcoming Sessions */}
       <TabPanel value={tabValue} index={0}>
-        {isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : upcomingChats.length === 0 ? (
-          <Box sx={{ py: 4, textAlign: 'center' }}>
+        {!isLoading && !apiError && upcomingChats.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 6 }}>
+            <InfoIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
             <Typography variant="h6" gutterBottom>
-              No upcoming coffee chats
+              No Upcoming Sessions
             </Typography>
-            <Typography variant="body1" color="text.secondary" paragraph>
-              You don't have any scheduled coffee chats right now.
+            <Typography color="text.secondary" paragraph>
+              You don't have any upcoming coffee chats scheduled
             </Typography>
-            <Paper 
-              elevation={0} 
-              sx={{ 
-                p: 3, 
-                mb: 3, 
-                backgroundColor: '#f5f9ff', 
-                border: '1px dashed #4a90e2',
-                borderRadius: 2 
-              }}
-            >
-              <Typography variant="body2" align="center">
-                To schedule a coffee chat: <br />
-                1. Go to <MuiLink component={Link} to="/matches">Matches</MuiLink> <br />
-                2. Find a professional you'd like to chat with <br />
-                3. Click "Schedule" to select a time slot <br />
-                4. Your confirmed schedules will appear here
-              </Typography>
-            </Paper>
             <Button 
               variant="contained" 
-              color="primary"
-              component={Link}
+              color="primary" 
+              component={Link} 
               to="/professionals"
             >
               Find Professionals
             </Button>
           </Box>
         ) : (
-          <Grid container spacing={3}>
+          <Grid container spacing={3} sx={{ mt: 1 }}>
             {upcomingChats.map((chat) => (
-              <Grid item xs={12} sm={6} md={4} key={chat.id}>
-                <CoffeeChatCard 
+              <Grid item xs={12} md={6} lg={4} key={chat.id}>
+                <CoffeeChatCard
                   chat={chat}
-                  onCancel={() => handleCancelChat(chat.id)}
-                  onReschedule={() => handleRescheduleChat(chat.id)}
                   onJoinMeeting={() => handleJoinMeeting(chat.meetingLink)}
+                  onCancel={() => {/* handle cancel */}}
+                  onReschedule={() => handleRescheduleChat(chat.id)}
+                  isInvitationBased={!!chat.invitationId}
                 />
               </Grid>
             ))}
           </Grid>
         )}
       </TabPanel>
-      
-      {/* Past Coffee Chats Tab */}
+
+      {/* Past Sessions */}
       <TabPanel value={tabValue} index={1}>
-        {isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : pastChats.length === 0 ? (
-          <Box sx={{ py: 4, textAlign: 'center' }}>
+        {!isLoading && !apiError && pastChats.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 6 }}>
+            <EventIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
             <Typography variant="h6" gutterBottom>
-              No past coffee chats
+              No Past Sessions
             </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Your completed or cancelled coffee chats will appear here.
+            <Typography color="text.secondary" paragraph>
+              Your completed coffee chats will appear here
             </Typography>
           </Box>
         ) : (
-          <Grid container spacing={3}>
+          <Grid container spacing={3} sx={{ mt: 1 }}>
             {pastChats.map((chat) => (
-              <Grid item xs={12} sm={6} md={4} key={chat.id}>
-                <CoffeeChatCard 
+              <Grid item xs={12} md={6} lg={4} key={chat.id}>
+                <CoffeeChatCard
                   chat={chat}
-                  onReview={() => !chat.hasReview && handleLeaveReview(chat.id)}
+                  onReview={() => handleLeaveReview(chat.id)}
+                  isInvitationBased={!!chat.invitationId}
+                  onUnlockChat={handleUnlockChat}
+                  onOpenChat={handleOpenChat}
                 />
               </Grid>
             ))}
           </Grid>
         )}
       </TabPanel>
-      
+
       {/* Review Dialog */}
       <Dialog open={reviewDialogOpen} onClose={() => setReviewDialogOpen(false)}>
-        <DialogTitle>Leave Feedback</DialogTitle>
+        <DialogTitle>Leave a Review</DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 2, mb: 3 }}>
-            <Typography gutterBottom>How was your experience?</Typography>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              How was your coffee chat experience?
+            </Typography>
             <Rating
               name="rating"
               value={reviewData.rating}
               onChange={handleRatingChange}
               size="large"
-              precision={0.5}
+              sx={{ mt: 1 }}
             />
           </Box>
           <TextField
             autoFocus
-            label="Comments"
+            margin="dense"
+            id="comment"
             name="comment"
-            value={reviewData.comment}
-            onChange={handleReviewChange}
+            label="Your feedback"
             multiline
             rows={4}
             fullWidth
             variant="outlined"
-            placeholder="Share your experience and feedback about this coffee chat..."
+            value={reviewData.comment}
+            onChange={handleReviewChange}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setReviewDialogOpen(false)} color="inherit">
-            Cancel
+          <Button onClick={() => setReviewDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSubmitReview} variant="contained" color="primary">
+            Submit Review
           </Button>
-          <Button onClick={handleSubmitReview} color="primary" variant="contained">
-            Submit Feedback
-          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Unlock Chat Dialog */}
+      <Dialog 
+        open={unlockDialogOpen} 
+        onClose={() => !paymentProcessing && setUnlockDialogOpen(false)}
+      >
+        <DialogTitle>Unlock Chat Access</DialogTitle>
+        <DialogContent>
+          {chatUnlockStatus.success ? (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              Chat unlocked successfully! You can now continue the conversation.
+            </Alert>
+          ) : chatUnlockStatus.error ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {chatUnlockStatus.error}
+            </Alert>
+          ) : (
+            <>
+              <Typography variant="body1" paragraph>
+                Unlocking chat access allows you to continue the conversation with your coffee chat partner after your session.
+              </Typography>
+              <Typography variant="body1" paragraph>
+                For this demo, chat unlocking is free. In a production environment, this would typically require a small fee.
+              </Typography>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {!chatUnlockStatus.success && (
+            <>
+              <Button 
+                onClick={() => setUnlockDialogOpen(false)}
+                disabled={paymentProcessing}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleProcessUnlock} 
+                variant="contained" 
+                color="primary"
+                disabled={paymentProcessing}
+              >
+                {paymentProcessing ? (
+                  <CircularProgress size={24} />
+                ) : (
+                  'Unlock Chat Access'
+                )}
+              </Button>
+            </>
+          )}
+          {chatUnlockStatus.success && (
+            <Button onClick={() => setUnlockDialogOpen(false)}>
+              Close
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Container>

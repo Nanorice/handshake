@@ -10,7 +10,8 @@ This document outlines the MongoDB schema for the Handshake application. All dat
   email: String,               // Unique, required
   passwordHash: String,        // Required
   role: String,                // 'seeker' or 'professional'
-  name: String,                // Full name
+  firstName: String,           // User's first name
+  lastName: String,            // User's last name
   bio: String,                 // Short user bio
   resumeUrl: String,           // For job seekers (optional)
   linkedinUrl: String,         // Professional's LinkedIn (optional)
@@ -45,6 +46,69 @@ This document outlines the MongoDB schema for the Handshake application. All dat
     }
   ],
   rate: Number,                // Hourly rate for sessions
+  isPublic: Boolean,           // Controls public visibility of the profile, defaults to true
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+## Invitation Collection
+
+```javascript
+{
+  _id: ObjectId,
+  sender: ObjectId,            // Reference to User (seeker who sends invitation)
+  receiver: ObjectId,          // Reference to User (professional who receives invitation)
+  status: String,              // 'pending', 'accepted', 'declined', 'cancelled'
+  message: String,             // Message from sender to receiver
+  sessionDetails: {
+    proposedDate: Date,        // Proposed date and time for the meeting
+    duration: Number,          // Duration in minutes
+    topic: String              // Topic for the coffee chat
+  },
+  threadId: ObjectId,          // Reference to Thread for messaging
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+## Thread Collection
+
+```javascript
+{
+  _id: ObjectId,
+  participants: [ObjectId],    // Array of User IDs participating in this thread
+  lastMessage: {
+    content: String,           // Content of the last message
+    sender: ObjectId,          // User who sent the last message
+    timestamp: Date,           // When the last message was sent
+    messageType: String        // Type of the last message
+  },
+  unreadCount: Map,            // Map of user IDs to unread message counts
+                               // Example: { "userId1": 5, "userId2": 0 }
+  status: String,              // 'active' or 'archived'
+  metadata: {
+    isGroupChat: Boolean,      // Whether this is a group chat
+  },
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+## Message Collection
+
+```javascript
+{
+  _id: ObjectId,
+  threadId: ObjectId,          // Reference to Thread
+  sender: ObjectId,            // User who sent the message
+  content: String,             // Message content
+  messageType: String,         // 'text', 'image', 'invite', etc.
+  metadata: {                  // Additional data based on message type
+    inviteId: ObjectId,        // For invitation-related messages
+    status: String,            // Status of related invitation
+    // Other metadata fields as needed
+  },
   createdAt: Date,
   updatedAt: Date
 }
@@ -110,6 +174,9 @@ This document outlines the MongoDB schema for the Handshake application. All dat
 4. Use indexes for frequently queried fields:
    - User.email
    - ProfessionalProfile.userId
+   - Invitation.sender and Invitation.receiver
+   - Invitation.status
+   - Thread.participants
    - Session.seekerId and Session.professionalId
    - Payment.sessionId
    - Notification.userId
