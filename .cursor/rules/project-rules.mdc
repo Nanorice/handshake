@@ -4,37 +4,58 @@ globs:
 alwaysApply: true
 ---
 ### Project Rules
-1. **Frontend**:
-   - Use functional React components with Tailwind classes.
-   - Use PascalCase for component filenames (e.g., `BookingCard.tsx`).
 
-2. **Backend**:
-   - Organize routes into `server/src/routes/` with clear responsibility separation.
-   - Use TypeScript for new code (`.ts` extension).
-   - Use `async/await` for MongoDB operations (no callbacks).
+#### General
+1.  All new code MUST adhere to these established project rules.
+2.  Development workflow:
+    *   Feature branches MUST be created from `main` for new features.
+    *   Descriptive commit messages explaining the changes MUST be used.
+    *   Code MUST be reviewed for security and performance issues before merging.
+    *   Backward compatibility with existing API endpoints MUST be maintained.
+3.  Tests MUST be written for critical functionality.
 
-3. **Security**:
-   - Never expose JWT secrets or Stripe keys – use `.env`.
-   - Validate API inputs with Zod (e.g., email/password checks).
+#### Frontend Development
+1.  React components MUST be functional components.
+2.  Tailwind CSS classes MUST be used for styling.
+3.  Component filenames MUST use PascalCase (e.g., `BookingCard.tsx`).
+4.  Components MUST be kept small and focused on a single responsibility.
+5.  React hooks MUST be used for state management and side effects.
+6.  React hook names MUST follow the `useBookingForm`, `useAuth` convention.
+7.  Component names MUST be in PascalCase (e.g., `ProfileCard`, `BookingForm`).
 
-4. **Naming**:
-   - Database collections: `camelCase` (e.g., `users`, `professionals`).
-   - React hooks: `useBookingForm`, `useAuth`.
-   - Components: PascalCase (e.g., `ProfileCard`, `BookingForm`).
+#### Backend Development
+1.  Routes MUST be organized into `server/src/routes/` with clear responsibility separation.
+2.  New backend code MUST use TypeScript (`.ts` extension).
+3.  `async/await` MUST be used for MongoDB operations; callbacks are not permitted.
+4.  RESTful API design principles MUST be followed.
+5.  Proper error handling with standardized response formats MUST be implemented.
 
-5. **Documentation**:
-   - Update `notepad.md` with reusable code snippets.
-   - Keep DATABASE_SCHEMA.md in sync with model changes.
-   - Update all routes created and used in the API_ROUTES.md file
+#### Database Standards
+1.  Database collection names MUST be in `camelCase` (e.g., `users`, `professionals`).
+2.  MongoDB schema validation MUST be used where possible.
+3.  Embedded documents MUST be kept to a reasonable size.
+4.  Transactions MUST be used for operations spanning multiple collections.
+5.  Projections (`select()`) MUST be used to retrieve only necessary fields from the database.
 
-6. **Interaction**:
-   - When I asking about the code:
-      - Always Explain code like to a beginner
-      - Always Walk through step-by-step logic
-      - Suggest better patterns
+#### Security
+1.  JWT secrets or Stripe keys MUST NEVER be exposed directly in code; `.env` files MUST be used.
+2.  API inputs MUST be validated using Zod (e.g., for email/password checks).
+3.  Rate limiting MUST be implemented on authentication and other sensitive endpoints.
+4.  User inputs MUST be sanitized to prevent injection attacks.
+5.  HTTPS MUST be used for all production communications.
 
-7. **Execution**:
-   - Never start a new server when I have it already open
+#### Documentation
+1.  Reusable code snippets MUST be added to `notepad.md`.
+2.  `DATABASE_SCHEMA.md` MUST be kept in sync with model changes.
+3.  All routes created and used MUST be updated in the `API_ROUTES.md` file.
+4.  Authentication flows and token management MUST be documented.
+
+#### AI Assistant Interaction
+1.  When the user asks about code, the AI assistant MUST:
+    *   Explain code as if to a beginner.
+    *   Walk through the logic step-by-step.
+    *   Suggest better patterns or improvements where applicable.
+2.  The AI assistant MUST NOT start a new server if one is already running.
 
 
 

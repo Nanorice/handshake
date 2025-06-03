@@ -8,6 +8,9 @@ const Thread = require('./models/Thread');
 const Message = require('./models/Message');
 require('dotenv').config();
 
+// Fix Mongoose strictQuery deprecation warning
+mongoose.set('strictQuery', false);
+
 // Force port to be 5000 to match the original configuration
 const PORT = process.env.PORT || 5000;
 console.log(`Configuring server to use port: ${PORT}`);
@@ -15,18 +18,52 @@ console.log(`Configuring server to use port: ${PORT}`);
 // Create HTTP server
 const server = http.createServer(app);
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+// MongoDB connection with fallback options
+const connectToMongoDB = async () => {
+  const mongoOptions = {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  };
+
+  // Try multiple connection strings in order of preference
+  const connectionStrings = [
+    process.env.MONGODB_URI, // First try environment variable
+    // If no env var, try Atlas connection since it was working with quick-start
+    'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0',
+    'mongodb://localhost:27017/handshake', // Then try local MongoDB
+    'mongodb://127.0.0.1:27017/handshake' // Alternative local address
+  ].filter(Boolean); // Remove undefined values
+
+  for (const connectionString of connectionStrings) {
+    try {
+      console.log(`Attempting to connect to MongoDB: ${connectionString.replace(/\/\/.*@/, '//***:***@')}`);
+      await mongoose.connect(connectionString, mongoOptions);
+      console.log('Successfully connected to MongoDB database');
+      return true;
+    } catch (error) {
+      console.warn(`Failed to connect to ${connectionString.replace(/\/\/.*@/, '//***:***@')}: ${error.message}`);
+      if (connectionString === connectionStrings[connectionStrings.length - 1]) {
+        throw error; // Throw error only on the last attempt
+      }
+    }
+  }
+};
+
+// Connect to MongoDB with proper error handling
+connectToMongoDB()
   .then(() => {
-    console.log('Successfully connected to MongoDB database');
-    
     // Start server after DB connection - ensure we use the PORT variable
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
   })
   .catch(err => {
-    console.error('Error connecting to MongoDB:', err);
+    console.error('❌ Failed to connect to any MongoDB instance:', err.message);
+    console.log('\n📋 To fix this issue, you can:');
+    console.log('1. Install and run MongoDB locally: https://docs.mongodb.com/manual/installation/');
+    console.log('2. Or update the MONGODB_URI environment variable with a valid connection string');
+    console.log('3. Or ensure your IP is whitelisted if using MongoDB Atlas');
+    process.exit(1);
   });
 
 // Initialize Socket.io with the server, use the new socketService

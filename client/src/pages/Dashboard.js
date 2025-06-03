@@ -29,7 +29,7 @@ import { debugApiConnection } from '../services/professionalService';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import InvitationList from '../components/Invitation/InvitationList';
 import { getDashboardStats, getInvitationStats } from '../services/dashboardService';
-import { useTheme } from '@mui/material/styles';
+import { useTheme } from '../contexts/ThemeContext';
 
 // Define API_URL with explicit port 5000 to match the server
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -275,34 +275,59 @@ const Dashboard = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      {/* Debug information - only show in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <Alert 
-          severity={tokenStatus.exists ? "info" : "warning"} 
-          sx={{ mb: 2 }}
-          action={
-            !tokenStatus.exists ? (
-              <Button color="inherit" size="small" onClick={handleLogout}>
-                Go to Login
-              </Button>
-            ) : (
-              <Button 
-                color="inherit" 
-                size="small" 
-                startIcon={<BugReport />}
-                onClick={testApiConnection}
-              >
-                Test API Connection
-              </Button>
-            )
-          }
-        >
-          <Typography variant="body2">
-            Token status: {tokenStatus.exists ? `Found (${tokenStatus.value})` : 'Missing!'}
-          </Typography>
-        </Alert>
-      )}
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: theme.bg, 
+      color: theme.text,
+      padding: '32px 16px'
+    }}>
+      <Container maxWidth="lg">
+        {/* Debug information - only show in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div style={{
+            backgroundColor: tokenStatus.exists ? theme.components.card.background : theme.palette.error.main,
+            color: tokenStatus.exists ? theme.text : '#ffffff',
+            padding: '16px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            border: `1px solid ${tokenStatus.exists ? theme.border : theme.palette.error.dark}`
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '14px' }}>
+                Token status: {tokenStatus.exists ? `Found (${tokenStatus.value})` : 'Missing!'}
+              </span>
+              {!tokenStatus.exists ? (
+                <button 
+                  onClick={handleLogout}
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: '#ffffff',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    padding: '4px 12px',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Go to Login
+                </button>
+              ) : (
+                <button 
+                  onClick={testApiConnection}
+                  style={{
+                    backgroundColor: theme.accent,
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '4px 12px',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Test API Connection
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       
       {/* Debug test results */}
       {debugResult && (
@@ -338,29 +363,41 @@ const Dashboard = () => {
         </Alert>
       )}
       
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <Typography variant="h4" component="h1" gutterBottom sx={{ mr: 1 }}>
-            Welcome back, {userData.firstName}!
-          </Typography>
-          {isProfessional && (
-            <Chip 
-              icon={<WorkOutline fontSize="small" />}
-              label="Professional" 
-              size="small"
-              color="primary"
-              sx={{ 
-                fontWeight: 500,
-                backgroundColor: theme.palette.primary.main,
-                color: '#fff' 
-              }}
-            />
-          )}
-        </Box>
-        <Typography variant="body1" color="text.secondary">
-          Here's what's happening with your Handshake account
-        </Typography>
-      </Box>
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', gap: '12px' }}>
+            <h1 style={{ 
+              fontSize: '32px', 
+              fontWeight: '700', 
+              margin: 0, 
+              color: theme.text 
+            }}>
+              Welcome back, {userData.firstName}!
+            </h1>
+            {isProfessional && (
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                backgroundColor: theme.accent,
+                color: '#ffffff',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontWeight: '500'
+              }}>
+                <WorkOutline style={{ fontSize: '16px' }} />
+                Professional
+              </span>
+            )}
+          </div>
+          <p style={{ 
+            fontSize: '16px', 
+            margin: 0, 
+            color: theme.textSecondary 
+          }}>
+            Here's what's happening with your Handshake account
+          </p>
+        </div>
 
       <Grid container spacing={4}>
         {/* Quick actions */}
@@ -705,7 +742,8 @@ const Dashboard = () => {
           </Paper>
         </Grid>
       </Grid>
-    </Container>
+      </Container>
+    </div>
   );
 };
 

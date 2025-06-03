@@ -177,8 +177,8 @@ const MessageComposer = ({
               // Upload file to server (or use mock in development)
               const uploadResult = await fileService.uploadFile(file, 'message');
               
-              // Create a file metadata object
-              resolve({
+              // Create and resolve a file metadata object
+              return resolve({
                 file,
                 id: uploadResult?.filename || Date.now() + Math.random().toString(36).substring(2, 10),
                 name: file.name,
@@ -191,7 +191,7 @@ const MessageComposer = ({
               console.error('Error uploading file:', error);
               
               // Fallback to local preview only
-              resolve({
+              return resolve({
                 file,
                 id: Date.now() + Math.random().toString(36).substring(2, 10),
                 name: file.name,

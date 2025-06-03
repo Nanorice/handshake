@@ -24,7 +24,7 @@ import Brightness7Icon from '@mui/icons-material/Brightness7';
 import ChatIcon from '@mui/icons-material/Chat';
 import EmailIcon from '@mui/icons-material/Email';
 import WorkOutlineIcon from '@mui/icons-material/WorkOutline';
-import { ThemeContext } from '../contexts/ThemeContext';
+import { useTheme as useCustomTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import socketService from '../services/socketService';
 import { getUserType } from '../utils/authUtils';
@@ -41,7 +41,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
-  const { darkMode, toggleDarkMode } = useContext(ThemeContext);
+  const { isDarkMode, toggleTheme } = useCustomTheme();
   const { user, isAuthenticated, logout, refreshAuthState } = useAuth();
   const [directlyAuthenticated, setDirectlyAuthenticated] = useState(checkDirectAuth());
   const [anchorEl, setAnchorEl] = useState(null);
@@ -191,7 +191,6 @@ const Navbar = () => {
             </Typography>
             {isProfessional && (
               <Chip
-                icon={<WorkOutlineIcon fontSize="small" />}
                 label="Pro"
                 size="small"
                 sx={{
@@ -327,17 +326,17 @@ const Navbar = () => {
             )}
 
             {/* Dark Mode Toggle */}
-            <Tooltip title={`Toggle ${darkMode ? 'light' : 'dark'} mode`}>
+            <Tooltip title={`Toggle ${isDarkMode ? 'light' : 'dark'} mode`}>
               <IconButton 
-                onClick={toggleDarkMode} 
+                onClick={toggleTheme} 
                 color="inherit" 
                 sx={{ 
                   ...(isProfessional && {
-                    color: darkMode ? '#fff' : theme.palette.primary.main
+                    color: isDarkMode ? '#fff' : theme.palette.primary.main
                   })
                 }}
               >
-                {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
+                {isDarkMode ? <Brightness7Icon /> : <Brightness4Icon />}
               </IconButton>
             </Tooltip>
 

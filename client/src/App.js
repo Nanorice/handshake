@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { createTheme, ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { useTheme } from './contexts/ThemeContext';
+import socketService from './services/socketService';
+import { getCurrentUserId, getUserType } from './utils/authUtils';
 
 // Import components
 import Navbar from './components/Navbar';
@@ -19,6 +22,7 @@ import Matches from './pages/Matches';
 import CoffeeChats from './pages/CoffeeChats';
 import RegisterProfessional from './pages/RegisterProfessional';
 import RegisterSeeker from './pages/RegisterSeeker';
+import ProfessionalLanding from './pages/ProfessionalLanding';
 import MessageNotifications from './components/Messaging/MessageNotifications';
 import InvitationNotifications from './components/Invitation/InvitationNotifications';
 import AdminDashboard from './pages/AdminDashboard';
@@ -26,10 +30,6 @@ import MessagingTest from './pages/MessagingTest';
 import SimpleChat from './pages/SimpleChat';
 import PublicProfileSetupPage from './pages/PublicProfileSetupPage';
 import DirectTester from './components/DirectTester';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ThemeContext } from './contexts/ThemeContext';
-import { getCurrentUserId, getUserType } from './utils/authUtils';
-import socketService from './services/socketService';
 import { NotificationProvider, useNotification } from './contexts/NotificationContext';
 import { InvitationProvider, useInvitation } from './contexts/InvitationContext';
 import SimpleInvitationPage from './pages/SimpleInvitationPage';
@@ -270,6 +270,7 @@ function AppRoutes() {
         <Route path="/register" element={!checkDirectAuth() ? <RegisterForm /> : <Navigate to="/dashboard" replace />} />
         <Route path="/register/professional" element={!checkDirectAuth() ? <RegisterProfessional /> : <Navigate to="/dashboard" replace />} />
         <Route path="/register/seeker" element={!checkDirectAuth() ? <RegisterSeeker /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/for-professionals" element={!checkDirectAuth() ? <ProfessionalLanding /> : <Navigate to="/dashboard" replace />} />
         
         {/* Protected routes */}
         <Route path="/dashboard" element={checkDirectAuth() ? <><Navbar /><Dashboard /></> : <Navigate to="/login" state={{ from: '/dashboard' }} replace />} />
@@ -326,136 +327,129 @@ function AppRoutes() {
   );
 }
 
-function App() {
-  const [darkMode, setDarkMode] = useState(localStorage.getItem('darkMode') === 'true');
+// Material-UI Theme Provider Component
+const MuiThemeWrapper = ({ children }) => {
+  const customTheme = useTheme();
   
-  // Check if user is a professional
-  const isProfessional = localStorage.getItem('userData') ? 
-    JSON.parse(localStorage.getItem('userData')).userType === 'professional' : false;
-
-  // Create theme based on dark mode preference and user type
-  const theme = createTheme({
+  const muiTheme = createTheme({
     palette: {
-      mode: darkMode ? 'dark' : 'light',
+      mode: customTheme.isDarkMode ? 'dark' : 'light',
       primary: {
-        // Darker blue for professionals
-        main: isProfessional ? '#1E40AF' : '#2563EB', // Professionals: Blue-800 vs Blue-600
-        dark: isProfessional ? '#1E3A8A' : '#1D4ED8', // Professionals: Blue-900 vs Blue-700
-        light: isProfessional ? '#BFDBFE' : '#DBEAFE', // Professionals: Blue-200 vs Blue-100
+        main: customTheme.accent,
+        light: customTheme.accentHover,
+        dark: customTheme.isDarkMode ? '#1a6929' : '#0a58ca',
+        contrastText: '#ffffff'
       },
       secondary: {
-        main: isProfessional ? '#4338CA' : '#4F46E5', // Professionals: Darker indigo
-        dark: isProfessional ? '#3730A3' : '#4338CA',
-        light: isProfessional ? '#C7D2FE' : '#E0E7FF',
+        main: customTheme.textSecondary,
+        light: customTheme.isDarkMode ? '#9ca3af' : '#6b7280',
+        dark: customTheme.isDarkMode ? '#6b7280' : '#4b5563',
+        contrastText: customTheme.isDarkMode ? '#ffffff' : '#000000'
       },
-      success: {
-        main: '#059669', // Emerald-600 from design system
-        dark: '#047857',
-        light: '#ECFDF5',
+      background: {
+        default: customTheme.bg,
+        paper: customTheme.cardBg
       },
+      text: {
+        primary: customTheme.text,
+        secondary: customTheme.textSecondary
+      },
+      divider: customTheme.border,
       error: {
-        main: '#DC2626', // Red-600 from design system
-        dark: '#B91C1C',
-        light: '#FEF2F2',
+        main: '#f85149',
+        light: '#ff7b7b',
+        dark: '#da3633',
+        contrastText: '#ffffff'
       },
       warning: {
-        main: '#D97706', // Amber-600
-        dark: '#B45309',
-        light: '#FFFBEB',
+        main: '#d29922',
+        light: '#f5c542',
+        dark: '#b8860b',
+        contrastText: '#000000'
       },
-      info: {
-        main: '#0284C7', // Light Blue-600
-        dark: '#0369A1',
-        light: '#F0F9FF',
-      },
-      background: darkMode 
-        ? {
-            default: isProfessional ? '#0F1629' : '#0F172A', // Slightly darker for professionals
-            paper: isProfessional ? '#1E2842' : '#1E293B',   // Slightly darker for professionals
-          }
-        : {
-            default: isProfessional ? '#EFF6FF' : '#F8FAFC', // Light blue tint for professionals in light mode
-            paper: '#FFFFFF',
-          },
-      text: darkMode
-        ? {
-            primary: '#F1F5F9', // Slate-100 for dark mode
-            secondary: '#94A3B8', // Slate-400 for dark mode
-          }
-        : {
-            primary: isProfessional ? '#1E3A8A' : '#1E293B', // Darker blue text for professionals
-            secondary: '#64748B', // Gray-500
-          },
-    },
-    typography: {
-      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-      h1: { fontWeight: 600 },
-      h2: { fontWeight: 600 },
-      h3: { fontWeight: 600 },
-      h4: { fontWeight: 600 },
-      h5: { fontWeight: 600 },
-      h6: { fontWeight: 600 },
-    },
-    shape: {
-      borderRadius: 8
+      success: {
+        main: customTheme.isDarkMode ? '#238636' : '#2da44e',
+        light: customTheme.isDarkMode ? '#2ea043' : '#4caf50',
+        dark: customTheme.isDarkMode ? '#1a6929' : '#1e7e34',
+        contrastText: '#ffffff'
+      }
     },
     components: {
-      MuiButton: {
+      MuiPaper: {
         styleOverrides: {
           root: {
-            textTransform: 'none',
-            fontWeight: 500
+            backgroundColor: customTheme.cardBg,
+            backgroundImage: 'none'
           }
         }
       },
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: 12,
+            backgroundColor: customTheme.cardBg,
+            border: `1px solid ${customTheme.border}`,
+            boxShadow: customTheme.components.card.shadow
           }
         }
       },
-      MuiAppBar: {
+      MuiButton: {
         styleOverrides: {
           root: {
-            background: darkMode 
-              ? isProfessional 
-                ? 'rgba(15, 22, 41, 0.8)' // Darker for professionals
-                : 'rgba(15, 23, 42, 0.8)' 
-              : isProfessional
-                ? 'rgba(239, 246, 255, 0.8)' // Light blue tint for professionals
-                : 'rgba(255, 255, 255, 0.8)',
-            backdropFilter: 'blur(8px)',
+            textTransform: 'none',
+            fontWeight: 500
+          },
+          contained: {
+            boxShadow: 'none',
+            '&:hover': {
+              boxShadow: 'none'
+            }
+          }
+        }
+      },
+      MuiTextField: {
+        styleOverrides: {
+          root: {
+            '& .MuiOutlinedInput-root': {
+              backgroundColor: customTheme.inputBg,
+              '& fieldset': {
+                borderColor: customTheme.inputBorder
+              },
+              '&:hover fieldset': {
+                borderColor: customTheme.textSecondary
+              },
+              '&.Mui-focused fieldset': {
+                borderColor: customTheme.inputFocus
+              }
+            }
           }
         }
       }
     }
   });
 
-  // Toggle dark mode
-  const toggleDarkMode = () => {
-    const newMode = !darkMode;
-    setDarkMode(newMode);
-    localStorage.setItem('darkMode', newMode);
-  };
-
   return (
-    <ThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <AuthProvider>
-            <NotificationProvider>
-              <InvitationProvider>
-                <Router>
-                  <AppRoutes />
-                </Router>
-              </InvitationProvider>
-            </NotificationProvider>
-          </AuthProvider>
-        </LocalizationProvider>
-      </ThemeProvider>
-    </ThemeContext.Provider>
+    <MuiThemeProvider theme={muiTheme}>
+      <CssBaseline />
+      {children}
+    </MuiThemeProvider>
+  );
+};
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AuthProvider>
+        <NotificationProvider>
+          <InvitationProvider>
+            <MuiThemeWrapper>
+              <Router>
+                <AppRoutes />
+              </Router>
+            </MuiThemeWrapper>
+          </InvitationProvider>
+        </NotificationProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

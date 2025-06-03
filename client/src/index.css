@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* React Chat Elements styles */
 .rce-container-mlist {
   height: 100%;

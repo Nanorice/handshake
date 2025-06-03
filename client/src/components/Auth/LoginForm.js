@@ -1,31 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Button,
-  TextField,
-  Typography,
-  Paper,
-  Grid,
-  Alert,
-  Snackbar,
-  Link
-} from '@mui/material';
 import { login } from '../../services/authService';
 import { setUserData, getAuthToken } from '../../utils/authUtils';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const LoginForm = () => {
   const navigate = useNavigate();
   const { refreshAuthState } = useAuth();
+  const theme = useTheme();
+  const { isDarkMode, toggleTheme } = theme;
+  const currentTheme = theme; // For backward compatibility
+  
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   const [errors, setErrors] = useState({});
-  const [openSnackbar, setOpenSnackbar] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const handleChange = (e) => {
@@ -60,6 +52,13 @@ const LoginForm = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      setNotification({ show: false, message: '', type: 'success' });
+    }, 5000);
+  };
+
   const attemptLogin = async () => {
     if (!validateForm()) return;
 
@@ -74,9 +73,7 @@ const LoginForm = () => {
 
         if (!token || !userData || !userData._id) {
           console.error('Login response missing token, user data, or user ID', response.data);
-          setSnackbarMessage('Login failed: Invalid server response.');
-          setSnackbarSeverity('error');
-          setOpenSnackbar(true);
+          showNotification('Login failed: Invalid server response.', 'error');
           setIsLoggingIn(false);
           return;
         }
@@ -97,9 +94,7 @@ const LoginForm = () => {
           isLoggedIn: localStorage.getItem('isLoggedIn')
         });
         
-        setSnackbarMessage('Login successful! Redirecting to dashboard...');
-        setSnackbarSeverity('success');
-        setOpenSnackbar(true);
+        showNotification('Login successful! Redirecting to dashboard...', 'success');
         
         setTimeout(() => {
           refreshAuthState(); 
@@ -108,22 +103,14 @@ const LoginForm = () => {
         
       } else {
         console.error('Login failed:', response.message || 'Unknown error');
-        setSnackbarMessage(response.message || 'Login failed. Please check your credentials and try again.');
-        setSnackbarSeverity('error');
-        setOpenSnackbar(true);
+        showNotification(response.message || 'Login failed. Please check your credentials and try again.', 'error');
       }
     } catch (error) {
       console.error('Login attempt error:', error);
-      setSnackbarMessage(error.message || 'An unexpected error occurred during login.');
-      setSnackbarSeverity('error');
-      setOpenSnackbar(true);
+      showNotification(error.message || 'An unexpected error occurred during login.', 'error');
     } finally {
       setIsLoggingIn(false);
     }
-  };
-
-  const handleSnackbarClose = () => {
-    setOpenSnackbar(false);
   };
 
   // Check if already authenticated
@@ -135,95 +122,275 @@ const LoginForm = () => {
   }, [navigate]);
 
   return (
-    <Paper 
-      elevation={4} 
-      sx={{
-        padding: { xs: 3, md: 5 },
-        maxWidth: 480,
-        width: '100%',
-        margin: 'auto',
-        mt: { xs: 4, md: 8 },
-        borderRadius: 2,
-        boxShadow: '0px 10px 30px -5px rgba(0,0,0,0.1)'
-      }}
-    >
-      <Typography variant="h4" component="h1" gutterBottom align="center" fontWeight="bold">
-        Sign In
-      </Typography>
-      <Typography variant="body2" color="textSecondary" align="center" mb={4}>
-        Welcome back! Please enter your credentials.
-      </Typography>
-      <Box component="form" noValidate onSubmit={(e) => { e.preventDefault(); attemptLogin(); }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              required
-              label="Email Address"
-              name="email"
-              type="email"
-              autoComplete="email"
-              value={formData.email}
-              onChange={handleChange}
-              error={!!errors.email}
-              helperText={errors.email}
-              variant="outlined"
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              required
-              label="Password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              value={formData.password}
-              onChange={handleChange}
-              error={!!errors.password}
-              helperText={errors.password}
-              variant="outlined"
-            />
-          </Grid>
-          <Grid item xs={12} sx={{ textAlign: 'right' }}>
-            <Link href="#" variant="body2">
-              Forgot password?
-            </Link>
-          </Grid>
-          <Grid item xs={12}>
-            <Button 
-              type="submit" 
-              fullWidth 
-              variant="contained" 
-              color="primary" 
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: currentTheme.bg,
+      color: currentTheme.text,
+      fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {/* Header */}
+      <header style={{
+        padding: '16px clamp(16px, 4vw, 32px)',
+        borderBottom: `1px solid ${currentTheme.border}`,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <div 
+          onClick={() => navigate('/')}
+          style={{
+            fontSize: '20px',
+            fontWeight: '600',
+            color: currentTheme.text,
+            cursor: 'pointer'
+          }}
+        >
+          Handshake
+        </div>
+        
+        <button
+          onClick={toggleTheme}
+          style={{
+            background: 'none',
+            border: `1px solid ${currentTheme.border}`,
+            borderRadius: '6px',
+            padding: '6px',
+            color: currentTheme.textSecondary,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.color = currentTheme.text;
+            e.target.style.borderColor = currentTheme.textSecondary;
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.color = currentTheme.textSecondary;
+            e.target.style.borderColor = currentTheme.border;
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            {isDarkMode ? (
+              <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+            ) : (
+              <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            )}
+          </svg>
+        </button>
+      </header>
+
+      {/* Main Content */}
+      <main style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 'clamp(32px, 5vw, 64px) clamp(16px, 4vw, 32px)'
+      }}>
+        <div style={{
+          width: '100%',
+          maxWidth: '400px',
+          backgroundColor: currentTheme.cardBg,
+          border: `1px solid ${currentTheme.border}`,
+          borderRadius: '12px',
+          padding: 'clamp(24px, 5vw, 40px)',
+          boxShadow: `0 8px 24px ${currentTheme.shadow}`
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+            <h1 style={{
+              fontSize: '28px',
+              fontWeight: '600',
+              margin: '0 0 8px 0',
+              color: currentTheme.text
+            }}>
+              Welcome back
+            </h1>
+            <p style={{
+              fontSize: '14px',
+              color: currentTheme.textSecondary,
+              margin: 0
+            }}>
+              Sign in to your account to continue
+            </p>
+          </div>
+
+          <form onSubmit={(e) => { e.preventDefault(); attemptLogin(); }}>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: currentTheme.text,
+                marginBottom: '6px'
+              }}>
+                Email address
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  fontSize: '14px',
+                  backgroundColor: currentTheme.inputBg,
+                  border: `1px solid ${errors.email ? currentTheme.error : currentTheme.inputBorder}`,
+                  borderRadius: '6px',
+                  color: currentTheme.text,
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease',
+                  boxSizing: 'border-box'
+                }}
+                onFocus={(e) => e.target.style.borderColor = currentTheme.inputFocus}
+                onBlur={(e) => e.target.style.borderColor = errors.email ? currentTheme.error : currentTheme.inputBorder}
+                placeholder="Enter your email"
+              />
+              {errors.email && (
+                <p style={{
+                  fontSize: '12px',
+                  color: currentTheme.error,
+                  margin: '4px 0 0 0'
+                }}>
+                  {errors.email}
+                </p>
+              )}
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: currentTheme.text,
+                marginBottom: '6px'
+              }}>
+                Password
+              </label>
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  fontSize: '14px',
+                  backgroundColor: currentTheme.inputBg,
+                  border: `1px solid ${errors.password ? currentTheme.error : currentTheme.inputBorder}`,
+                  borderRadius: '6px',
+                  color: currentTheme.text,
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease',
+                  boxSizing: 'border-box'
+                }}
+                onFocus={(e) => e.target.style.borderColor = currentTheme.inputFocus}
+                onBlur={(e) => e.target.style.borderColor = errors.password ? currentTheme.error : currentTheme.inputBorder}
+                placeholder="Enter your password"
+              />
+              {errors.password && (
+                <p style={{
+                  fontSize: '12px',
+                  color: currentTheme.error,
+                  margin: '4px 0 0 0'
+                }}>
+                  {errors.password}
+                </p>
+              )}
+            </div>
+
+            <div style={{ textAlign: 'right', marginBottom: '24px' }}>
+              <a href="#" style={{
+                fontSize: '14px',
+                color: currentTheme.accent,
+                textDecoration: 'none'
+              }}
+              onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+              onMouseLeave={(e) => e.target.style.textDecoration = 'none'}>
+                Forgot password?
+              </a>
+            </div>
+
+            <button
+              type="submit"
               disabled={isLoggingIn}
-              size="large"
-              sx={{ 
-                py: 1.5,
-                textTransform: 'none',
-                fontWeight: 'bold',
-                fontSize: '1rem'
+              style={{
+                width: '100%',
+                padding: '12px',
+                fontSize: '14px',
+                fontWeight: '500',
+                backgroundColor: isLoggingIn ? currentTheme.textSecondary : currentTheme.accent,
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: isLoggingIn ? 'not-allowed' : 'pointer',
+                transition: 'background-color 0.2s ease',
+                opacity: isLoggingIn ? 0.7 : 1
+              }}
+              onMouseEnter={(e) => {
+                if (!isLoggingIn) {
+                  e.target.style.backgroundColor = currentTheme.accentHover;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isLoggingIn) {
+                  e.target.style.backgroundColor = currentTheme.accent;
+                }
               }}
             >
-              {isLoggingIn ? 'Signing In...' : 'Sign In'}
-            </Button>
-          </Grid>
-        </Grid>
-      </Box>
-      <Typography variant="body2" align="center" sx={{ mt: 4 }}>
-        Don't have an account? <Link href="/register" fontWeight="bold">Sign Up</Link>
-      </Typography>
-      <Snackbar 
-        open={openSnackbar} 
-        autoHideDuration={6000} 
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} sx={{ width: '100%' }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    </Paper>
+              {isLoggingIn ? 'Signing in...' : 'Sign in'}
+            </button>
+          </form>
+
+          <div style={{
+            textAlign: 'center',
+            marginTop: '24px',
+            paddingTop: '24px',
+            borderTop: `1px solid ${currentTheme.border}`
+          }}>
+            <p style={{
+              fontSize: '14px',
+              color: currentTheme.textSecondary,
+              margin: 0
+            }}>
+              Don't have an account?{' '}
+              <span
+                onClick={() => navigate('/register')}
+                style={{
+                  color: currentTheme.accent,
+                  cursor: 'pointer',
+                  textDecoration: 'none'
+                }}
+                onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+                onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
+              >
+                Sign up
+              </span>
+            </p>
+          </div>
+        </div>
+      </main>
+
+      {/* Notification */}
+      {notification.show && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          backgroundColor: notification.type === 'error' ? currentTheme.error : currentTheme.success,
+          color: '#ffffff',
+          padding: '12px 16px',
+          borderRadius: '6px',
+          fontSize: '14px',
+          boxShadow: `0 4px 12px ${currentTheme.shadow}`,
+          zIndex: 1000,
+          maxWidth: '300px'
+        }}>
+          {notification.message}
+        </div>
+      )}
+    </div>
   );
 };
 
