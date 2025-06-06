@@ -335,45 +335,16 @@ export const MessageProvider = ({ children, threadId, userId }) => {
     }
     
     try {
-      // Create optimistic message for immediate UI feedback
-      const optimisticMessage = normalizeMessage({
-        _id: `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-        threadId: threadId,
-        content: content.trim(),
-        sender: { _id: userId },
-        createdAt: new Date().toISOString(),
-        pending: true
-      });
-      
-      // Add optimistic message to UI
-      setMessages(currentMessages => {
-        return [...currentMessages, optimisticMessage].sort(
-          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-      });
-      
       console.log(`[MessageProvider] Sending message to thread: ${threadId}`);
       const sentMessage = await messageService.sendMessage(threadId, content);
       console.log(`[MessageProvider] Message sent successfully:`, sentMessage);
       
-      if (sentMessage && sentMessage._id) {
-        // Replace optimistic message with server response
-        setMessages(currentMessages => 
-          currentMessages.map(msg => 
-            (msg._id === optimisticMessage._id) ? normalizeMessage(sentMessage) : msg
-          )
-        );
-      }
+      // Don't add optimistic message - rely on socket to deliver the real message
+      // This prevents duplication issues
       
       return sentMessage;
     } catch (error) {
       console.error('[MessageProvider] Error sending message:', error);
-      
-      // Remove optimistic message on error
-      setMessages(currentMessages => 
-        currentMessages.filter(msg => !msg._id.startsWith('temp-'))
-      );
-      
       setError('Failed to send message');
       return null;
     }

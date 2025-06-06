@@ -158,44 +158,62 @@ const EnhancedMessageThread = ({
   // Ensure messages is always an array
   const messagesArray = Array.isArray(messages) ? messages : [];
 
-  // Preserve scroll position between renders
+  // Simplified scroll management - replace complex useEffect with simpler logic
   useEffect(() => {
-    if (thread?._id) {
-      // Attempt to restore the scroll position
-      const containerId = 'enhanced-message-container';
-      // Delay restore to ensure messages are rendered
+    if (!thread?._id) return;
+    
+    const containerId = 'enhanced-message-container';
+    
+    // Setup scroll listener for this thread
+    const container = document.getElementById(containerId);
+    if (container) {
+      let scrollTimeout;
+      const handleScroll = () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          saveScrollPosition(containerId, thread._id);
+        }, 150);
+      };
+      
+      container.addEventListener('scroll', handleScroll, { passive: true });
+      
+      // Restore position when thread loads
       setTimeout(() => {
         const restored = restoreScrollPosition(containerId, thread._id);
         if (!restored && messagesArray.length > 0) {
-          // If we couldn't restore position, scroll to bottom
+          // Only scroll to bottom if we couldn't restore position
           scrollToBottom();
         }
       }, 100);
       
-      // Save scroll position on unmount
       return () => {
+        clearTimeout(scrollTimeout);
+        container.removeEventListener('scroll', handleScroll);
         saveScrollPosition(containerId, thread._id);
       };
     }
-  }, [thread?._id, messagesArray.length]);
-
-  // Save scroll position periodically
-  useEffect(() => {
-    if (!thread?._id) return;
-    
-    const saveScrollInterval = setInterval(() => {
-      saveScrollPosition('enhanced-message-container', thread._id);
-    }, 5000);
-    
-    return () => {
-      clearInterval(saveScrollInterval);
-    };
   }, [thread?._id]);
 
-  // Scroll to bottom on new messages
+  // Smart auto-scroll - only scroll when appropriate
   useEffect(() => {
-    scrollToBottom();
-  }, [messagesArray]);
+    if (messagesArray.length === 0) return;
+    
+    const container = document.getElementById('enhanced-message-container');
+    if (!container) return;
+    
+    // Check if user is near bottom or if last message is from current user
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const isNearBottom = distanceFromBottom < 100;
+    
+    const lastMessage = messagesArray[messagesArray.length - 1];
+    const isFromCurrentUser = lastMessage?.sender?._id === currentUserId;
+    
+    // Only auto-scroll if near bottom or user sent the message
+    if (isNearBottom || isFromCurrentUser) {
+      setTimeout(scrollToBottom, 50);
+    }
+  }, [messagesArray.length, currentUserId]);
 
   // Setup socket listeners for typing indicators
   useEffect(() => {
@@ -234,35 +252,6 @@ const EnhancedMessageThread = ({
       console.error('Error scrolling to bottom:', error);
     }
   };
-  
-  // Smarter auto-scrolling that only scrolls when appropriate
-  useEffect(() => {
-    // Only auto-scroll if user is already near the bottom or if we sent the message
-    const shouldAutoScroll = () => {
-      if (!messagesEndRef.current) return false;
-      
-      // Get the message container element (scrollable parent)
-      const scrollContainer = messagesEndRef.current.parentElement;
-      if (!scrollContainer) return false;
-      
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      
-      // Check if the last message is from the current user
-      const lastMessage = messagesArray[messagesArray.length - 1];
-      const isFromCurrentUser = lastMessage?.sender?._id === currentUserId;
-      
-      // Auto-scroll if:
-      // 1. User is already near bottom (within 300px)
-      // 2. The last message is from the current user (we just sent it)
-      return distanceFromBottom < 300 || isFromCurrentUser;
-    };
-    
-    // Only scroll if we have messages and should auto-scroll
-    if (messagesArray.length > 0 && shouldAutoScroll()) {
-      scrollToBottom();
-    }
-  }, [messagesArray, currentUserId]);
   
   const handleSendMessage = (messageText, attachments = []) => {
     // Call the parent component's onSendMessage function with text and attachments

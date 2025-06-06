@@ -97,12 +97,25 @@ const OptimizedMessageView = ({ threadId, onBack, darkMode = false }) => {
     };
   }, [threadId, handleIncomingMessage]);
   
-  // Auto-scroll to bottom
+  // Smart auto-scroll - only scroll when appropriate
   useEffect(() => {
-    if (messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length === 0) return;
+    
+    // Check if user is near bottom before auto-scrolling
+    const container = messagesEndRef.current?.parentElement;
+    if (!container) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const isNearBottom = distanceFromBottom < 200;
+    
+    // Only auto-scroll if user is near bottom
+    if (isNearBottom) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     }
-  }, [messages]);
+  }, [messages.length]); // Only depend on message count
   
   // PERFORMANCE: Optimistic message sending
   const handleSendMessage = useCallback(async (e) => {

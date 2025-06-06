@@ -26,6 +26,7 @@ import ProfessionalLanding from './pages/ProfessionalLanding';
 import MessageNotifications from './components/Messaging/MessageNotifications';
 import InvitationNotifications from './components/Invitation/InvitationNotifications';
 import AdminDashboard from './pages/AdminDashboard';
+import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import MessagingTest from './pages/MessagingTest';
 import SimpleChat from './pages/SimpleChat';
 import PublicProfileSetupPage from './pages/PublicProfileSetupPage';
@@ -35,6 +36,9 @@ import { InvitationProvider, useInvitation } from './contexts/InvitationContext'
 import SimpleInvitationPage from './pages/SimpleInvitationPage';
 import { MessageProvider } from './contexts/MessageProvider';
 import { GlobalMessageProvider } from './contexts/GlobalMessageContext';
+import SimpleChatBubble from './components/SimpleChatBubble';
+import TestChatBubble from './components/TestChatBubble';
+import FloatingChatSystem from './components/Messaging/FloatingChatSystem';
 
 
 // Helper function for direct auth check
@@ -288,6 +292,7 @@ function AppRoutes() {
         <Route path="/test" element={checkDirectAuth() ? <><Navbar /><MessagingTest /></> : <Navigate to="/login" replace />} />
         <Route path="/simple-chat" element={checkDirectAuth() ? <><Navbar /><SimpleChat /></> : <Navigate to="/login" replace />} />
         <Route path="/admin" element={checkDirectAuth() ? <><Navbar /><AdminDashboard /></> : <Navigate to="/login" replace />} />
+        <Route path="/analytics" element={checkDirectAuth() ? <><Navbar /><AnalyticsDashboard /></> : <Navigate to="/login" replace />} />
         <Route path="/direct-test" element={checkDirectAuth() ? <><Navbar /><DirectTester /></> : <Navigate to="/login" replace />} />
         <Route path="/simple-invitation/:id" element={checkDirectAuth() ? <><Navbar /><SimpleInvitationPage /></> : <Navigate to="/login" replace />} />
         <Route 
@@ -326,6 +331,9 @@ function AppRoutes() {
           onNavigate={handleNavigateToInvitation}
         />
       )}
+      
+      {/* Floating Chat System */}
+      {checkDirectAuth() && <FloatingChatSystem />}
       
 
     </>

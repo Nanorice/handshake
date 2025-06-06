@@ -2,18 +2,18 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import initSocketErrorHandler from './utils/socketErrorHandler';
-import { disableHmrFor } from './utils/scrollPositionManager';
+import { initGlobalScrollProtection } from './utils/globalScrollProtection';
 
 // Initialize socket error handler to prevent WebSocket errors from refreshing the page
 initSocketErrorHandler();
 
-// Disable HMR for files that cause refresh issues
+// Initialize global scroll protection to prevent scroll jumping
+initGlobalScrollProtection();
+
+// HMR configuration - scroll protection is now handled globally
 if (module && module.hot) {
-  // Preserve state for these modules
-  disableHmrFor('./utils/socketErrorHandler.js');
-  disableHmrFor('./utils/scrollPositionManager.js');
-  disableHmrFor('./components/Messaging/MessageThread.js');
-  disableHmrFor('./components/Messaging/EnhancedMessageThread.js');
+  // Global scroll protection handles state preservation during HMR
+  console.log('HMR: Scroll protection active');
 }
 
 // Clear localStorage during development to ensure proper testing

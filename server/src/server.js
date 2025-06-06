@@ -359,11 +359,74 @@ socketService.getIO().on('connection', (socket) => {
     }
   });
   
+  // Handle analytics subscription (admin only)
+  socket.on('subscribe-analytics', () => {
+    if (socket.user?.isAdmin || process.env.NODE_ENV === 'development') {
+      socket.join('analytics-room');
+      console.log(`[ANALYTICS] Admin user ${socket.userId} subscribed to analytics updates`);
+    } else {
+      console.log(`[ANALYTICS] Non-admin user ${socket.userId} tried to subscribe to analytics`);
+    }
+  });
+
+  // Handle analytics unsubscription
+  socket.on('unsubscribe-analytics', () => {
+    socket.leave('analytics-room');
+    console.log(`[ANALYTICS] User ${socket.userId} unsubscribed from analytics`);
+  });
+
   // Handle disconnect
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.userId}`);
   });
 });
+
+// Real-time Analytics Broadcasting
+const AnalyticsService = require('./services/analyticsService');
+
+// Broadcast analytics updates every 30 seconds
+setInterval(async () => {
+  try {
+    // Check if any admin users are subscribed to analytics
+    const analyticsRoom = socketService.getIO().sockets.adapter.rooms.get('analytics-room');
+    if (analyticsRoom && analyticsRoom.size > 0) {
+      console.log(`[ANALYTICS] Broadcasting to ${analyticsRoom.size} admin subscribers`);
+      
+      const metrics = await AnalyticsService.getRealTimeMetrics();
+      socketService.getIO().to('analytics-room').emit('analytics-update', {
+        type: 'real-time-metrics',
+        data: metrics,
+        timestamp: new Date()
+      });
+    }
+  } catch (error) {
+    console.error('[ANALYTICS] Error broadcasting real-time metrics:', error);
+  }
+}, 30000); // 30 seconds
+
+// Broadcast immediate analytics updates on specific events
+const broadcastAnalyticsUpdate = async (eventType, data = {}) => {
+  try {
+    const analyticsRoom = socketService.getIO().sockets.adapter.rooms.get('analytics-room');
+    if (analyticsRoom && analyticsRoom.size > 0) {
+      console.log(`[ANALYTICS] Broadcasting ${eventType} event to admins`);
+      
+      // Get fresh metrics for immediate updates
+      const metrics = await AnalyticsService.getRealTimeMetrics();
+      socketService.getIO().to('analytics-room').emit('analytics-update', {
+        type: 'event-triggered',
+        eventType,
+        data: { ...data, metrics },
+        timestamp: new Date()
+      });
+    }
+  } catch (error) {
+    console.error(`[ANALYTICS] Error broadcasting ${eventType} update:`, error);
+  }
+};
+
+// Export the broadcast function for use in other modules
+global.broadcastAnalyticsUpdate = broadcastAnalyticsUpdate;
 
 // Add a handler for unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {

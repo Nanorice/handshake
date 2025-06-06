@@ -337,12 +337,30 @@ const NewChatView = ({ thread, onSendMessage, onBack, isMobile, currentUserId, s
     fetchInitialMessages();
   }, [thread?._id, normalizeMessageFormat]); // normalizeMessageFormat is stable due to useCallback
 
-  // useEffect for scrolling to bottom
+  // Smart scrolling - only scroll if user is near bottom or sent the message
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length === 0) return;
+    
+    // Check if we should auto-scroll
+    const container = messagesEndRef.current?.parentElement;
+    if (!container) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const isNearBottom = distanceFromBottom < 200;
+    
+    // Check if last message is from current user
+    const lastMessage = messages[messages.length - 1];
+    const isFromCurrentUser = lastMessage?.sender?._id === currentUserId || 
+                             lastMessage?.senderId === currentUserId;
+    
+    // Only auto-scroll if near bottom or user sent the message
+    if (isNearBottom || isFromCurrentUser) {
+      setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
     }
-  }, [messages]); // Scroll when messages change
+  }, [messages.length, currentUserId]); // Only depend on message count and user ID // Scroll when messages change
 
   // Polling function to regularly check for new messages via API
   const pollForNewMessages = useCallback(async () => {

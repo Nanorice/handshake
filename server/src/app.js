@@ -13,6 +13,7 @@ const professionalProfileRoutes = require('./routes/professionalProfileRoutes');
 const invitationRoutes = require('./routes/invitationRoutes');
 const simpleInvitationRoutes = require('./routes/simpleInvitationRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
 
 // Initialize express app
 const app = express();
@@ -123,6 +124,7 @@ app.use('/api/professionalprofiles', professionalProfileRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/simple-invitations', simpleInvitationRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Diagnostic endpoint for invitation testing
 const Invitation = require('./models/Invitation');

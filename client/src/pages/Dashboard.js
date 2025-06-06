@@ -282,86 +282,7 @@ const Dashboard = () => {
       padding: '32px 16px'
     }}>
       <Container maxWidth="lg">
-        {/* Debug information - only show in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div style={{
-            backgroundColor: tokenStatus.exists ? theme.components.card.background : theme.palette.error.main,
-            color: tokenStatus.exists ? theme.text : '#ffffff',
-            padding: '16px',
-            borderRadius: '8px',
-            marginBottom: '16px',
-            border: `1px solid ${tokenStatus.exists ? theme.border : theme.palette.error.dark}`
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '14px' }}>
-                Token status: {tokenStatus.exists ? `Found (${tokenStatus.value})` : 'Missing!'}
-              </span>
-              {!tokenStatus.exists ? (
-                <button 
-                  onClick={handleLogout}
-                  style={{
-                    backgroundColor: 'transparent',
-                    color: '#ffffff',
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    padding: '4px 12px',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Go to Login
-                </button>
-              ) : (
-                <button 
-                  onClick={testApiConnection}
-                  style={{
-                    backgroundColor: theme.accent,
-                    color: '#ffffff',
-                    border: 'none',
-                    padding: '4px 12px',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Test API Connection
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      
-      {/* Debug test results */}
-      {debugResult && (
-        <Alert 
-          severity={debugResult.success ? "success" : "error"} 
-          sx={{ mb: 2 }}
-        >
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            API Connection Test: {debugResult.loading ? "Testing..." : (debugResult.success ? "Success" : "Failed")}
-          </Typography>
-          {debugResult.error && (
-            <Typography variant="body2" component="pre" sx={{ 
-              backgroundColor: 'rgba(0,0,0,0.05)', 
-              p: 1, 
-              borderRadius: 1,
-              maxHeight: '200px',
-              overflow: 'auto'
-            }}>
-              Error: {debugResult.error}
-            </Typography>
-          )}
-          {debugResult.data && (
-            <Box sx={{ mt: 1 }}>
-              <Button 
-                size="small" 
-                variant="outlined"
-                onClick={() => console.log('Debug data:', debugResult.data)}
-              >
-                View Details in Console
-              </Button>
-            </Box>
-          )}
-        </Alert>
-      )}
+
       
         <div style={{ marginBottom: '32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', gap: '12px' }}>
@@ -431,10 +352,10 @@ const Dashboard = () => {
               
               <Button 
                 variant="contained"
-                color={isProfessional ? "primary" : "secondary"}
+                color="primary"
                 fullWidth
                 startIcon={<Message />}
-                onClick={() => navigate('/messaging')}
+                onClick={() => navigate('/messages')}
                 sx={{ p: 1.5, borderRadius: 2 }}
               >
                 Messages

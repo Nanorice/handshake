@@ -65,10 +65,29 @@ const SimpleChat = () => {
     };
   }, []);
 
-  // Scroll to bottom when messages change
+  // Smart scroll - only scroll if user is near bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (messages.length === 0) return;
+    
+    // Check scroll position before auto-scrolling
+    const container = messagesEndRef.current?.parentElement;
+    if (!container) {
+      // Fallback: scroll to bottom
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const isNearBottom = distanceFromBottom < 200;
+    
+    // Only auto-scroll if user is near bottom
+    if (isNearBottom) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }, [messages.length]); // Only trigger on message count change
 
   // Load messages when selected user changes
   useEffect(() => {
