@@ -16,7 +16,8 @@ const socketAuth = async (socket, next) => {
     }
     
     // Verify the token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
+    const decoded = jwt.verify(token, jwtSecret);
     
     if (!decoded.userId) {
       console.error('Socket token missing userId:', decoded);

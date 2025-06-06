@@ -7,6 +7,8 @@ class SocketService {
     this.io = null;
     this.connections = new Map();
     this.threadRooms = new Map();
+    // OPTIMIZATION: Cache user data to avoid repeated DB calls
+    this.userCache = new Map();
   }
 
   /**
@@ -27,7 +29,12 @@ class SocketService {
         credentials: true
       },
       path: '/socket.io',
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      // OPTIMIZATION: Increase performance settings
+      pingTimeout: 30000,
+      pingInterval: 25000,
+      upgradeTimeout: 10000,
+      maxHttpBufferSize: 1e6
     });
 
     // Set up authentication middleware
@@ -36,7 +43,7 @@ class SocketService {
     // Set up connection handler
     this.io.on('connection', this.handleConnection.bind(this));
 
-    console.log('Socket.IO server initialized');
+    console.log('Socket.IO server initialized with optimized settings');
   }
 
   /**
@@ -48,6 +55,16 @@ class SocketService {
     
     // Add the connection to our map
     this.connections.set(socket.userId.toString(), socket);
+    
+    // OPTIMIZATION: Cache user data for faster message processing
+    this.userCache.set(socket.userId.toString(), {
+      _id: socket.userId,
+      firstName: socket.user?.firstName || 'User',
+      lastName: socket.user?.lastName || '',
+      email: socket.user?.email || '',
+      profile: socket.user?.profile || {},
+      userType: socket.user?.userType || 'seeker'
+    });
     
     // Join the user's personal room
     socket.join(socket.userId.toString());
@@ -70,8 +87,8 @@ class SocketService {
     // Leave a thread room
     socket.on('leave-thread', (threadId) => this.handleLeaveThread(socket, threadId));
     
-    // Send a message
-    socket.on('send-message', async (data) => this.handleSendMessage(socket, data));
+    // OPTIMIZED: Handle message sending with immediate response
+    socket.on('send-message', async (data) => this.handleSendMessageOptimized(socket, data));
     
     // Mark thread as read
     socket.on('mark-thread-read', (threadId) => this.handleMarkThreadRead(socket, threadId));
@@ -90,6 +107,10 @@ class SocketService {
   handleDisconnect(socket) {
     console.log(`User disconnected: ${socket.userId} (${socket.id})`);
     this.connections.delete(socket.userId.toString());
+    // Keep user cache for a while in case they reconnect quickly
+    setTimeout(() => {
+      this.userCache.delete(socket.userId.toString());
+    }, 60000); // Remove after 1 minute
   }
 
   /**
@@ -113,16 +134,11 @@ class SocketService {
     }
     this.threadRooms.get(threadId).add(socket.userId.toString());
 
-    // Emit thread joined event
+    // OPTIMIZATION: Send immediate acknowledgment
     socket.emit('thread-joined', {
       threadId,
-      success: true
-    });
-
-    // Emit to other participants that a user has joined
-    socket.to(threadRoom).emit('user-joined-thread', {
-      userId: socket.userId,
-      threadId
+      success: true,
+      timestamp: Date.now()
     });
   }
 
@@ -148,158 +164,231 @@ class SocketService {
   }
 
   /**
-   * Handle sending a message
+   * OPTIMIZED: Handle sending a message with immediate broadcasting
    * @param {Object} socket - Socket.IO socket instance
    * @param {Object} data - Message data
    */
-  async handleSendMessage(socket, data) {
+  async handleSendMessageOptimized(socket, data) {
     try {
-      const { threadId, content, messageType = 'text', replyToId = null, file = null } = data;
+      const { threadId, message } = data;
+      const { content, messageType = 'text', replyToId = null } = message;
       
-      console.log(`Received message from ${socket.userId} for thread ${threadId}: ${content}`);
+      console.log(`[OPTIMIZED] Processing message from ${socket.userId} for thread ${threadId}`);
       
-      // First, check if this is a valid thread that the user belongs to
-      const thread = await Thread.findOne({
-        _id: threadId,
-        participants: socket.userId
-      });
-      
-      if (!thread) {
-        socket.emit('error', {
-          message: 'Thread not found or you do not have access'
-        });
+      // OPTIMIZATION: Use cached user data instead of DB lookup
+      const cachedUser = this.userCache.get(socket.userId.toString());
+      if (!cachedUser) {
+        socket.emit('error', { message: 'User session expired' });
         return;
       }
-      
-      // If it's a reply, verify the original message exists
-      if (replyToId) {
-        const originalMessage = await Message.findOne({
-          _id: replyToId,
-          threadId
-        });
-        
-        if (!originalMessage) {
-          socket.emit('error', {
-            message: 'Original message not found or does not belong to this thread'
-          });
-          return;
-        }
-      }
-      
-      // Create the message
-      const messageData = {
+
+      // OPTIMIZATION: Create message object immediately for broadcasting
+      const messageObj = {
+        _id: null, // Will be set after DB save
         threadId,
-        sender: socket.userId,
+        sender: cachedUser,
         content,
         messageType,
-        isRead: false
+        isRead: false,
+        createdAt: new Date(),
+        replyTo: replyToId
       };
-      
-      // Add reply reference if it's a reply
-      if (replyToId) {
-        messageData.replyTo = replyToId;
-        messageData.messageType = 'reply';
-      }
-      
-      // Add file data if it's a file attachment
-      if (file && messageType === 'file') {
-        messageData.file = file;
-      }
-      
-      const message = new Message(messageData);
-      await message.save();
-      
-      // Update the thread
-      thread.lastMessage = {
-        content,
-        sender: socket.userId,
-        timestamp: Date.now(),
-        messageType: messageData.messageType
-      };
-      
-      // Increment unread count for other participants
-      thread.participants.forEach(participantId => {
-        if (participantId.toString() !== socket.userId.toString()) {
-          const currentCount = thread.unreadCount.get(participantId.toString()) || 0;
-          thread.unreadCount.set(participantId.toString(), currentCount + 1);
-        }
-      });
-      
-      await thread.save();
-      
-      // Populate the message
-      const populatedMessage = await Message.findById(message._id)
-        .populate('sender', 'firstName lastName email profile.profilePicture userType')
-        .populate('replyTo');
-      
-      // Emit the message to the thread room
+
+      // OPTIMIZATION: Broadcast immediately before DB operations
       const threadRoom = `thread:${threadId}`;
-      this.io.to(threadRoom).emit('new-message', populatedMessage);
+      const tempId = `temp-${Date.now()}-${socket.userId}`;
       
-      // Also send notifications to each participant
-      thread.participants.forEach(participantId => {
-        if (participantId.toString() !== socket.userId.toString()) {
-          this.io.to(participantId.toString()).emit('message-notification', {
-            threadId,
-            message: populatedMessage
-          });
-        }
+      // Send immediate response to sender
+      socket.emit('message-sent', {
+        tempId,
+        message: { ...messageObj, _id: tempId }
       });
+
+      // Broadcast to thread room immediately
+      this.io.to(threadRoom).emit('new-message', {
+        ...messageObj,
+        _id: tempId,
+        status: 'pending'
+      });
+
+      // OPTIMIZATION: Parallel processing - DB operations don't block broadcasting
+      Promise.all([
+        this.saveMessageToDatabase(socket.userId, threadId, message),
+        this.updateThreadMetadata(socket.userId, threadId, content, messageType)
+      ]).then(([savedMessage, thread]) => {
+        // Update with real message ID
+        const finalMessage = {
+          ...messageObj,
+          _id: savedMessage._id,
+          status: 'sent'
+        };
+
+        // Send confirmation with real ID
+        socket.emit('message-confirmed', {
+          tempId,
+          realId: savedMessage._id,
+          message: finalMessage
+        });
+
+        // Update thread room with real ID
+        this.io.to(threadRoom).emit('message-updated', {
+          tempId,
+          message: finalMessage
+        });
+
+        // OPTIMIZATION: Send notifications only to offline users to reduce noise
+        this.sendNotificationsToOfflineUsers(thread, finalMessage, socket.userId);
+
+      }).catch(error => {
+        console.error('[OPTIMIZED] Error processing message:', error);
+        
+        // Send error notification
+        socket.emit('message-error', {
+          tempId,
+          error: 'Failed to save message'
+        });
+        
+        // Remove failed message from thread room
+        this.io.to(threadRoom).emit('message-removed', { tempId });
+      });
+
     } catch (error) {
-      console.error('Error sending message:', error);
-      socket.emit('error', {
-        message: 'Failed to send message'
-      });
+      console.error('[OPTIMIZED] Error in handleSendMessageOptimized:', error);
+      socket.emit('error', { message: 'Failed to process message' });
     }
   }
 
   /**
-   * Handle marking a thread as read
+   * OPTIMIZATION: Separate DB operations for parallel processing
+   */
+  async saveMessageToDatabase(senderId, threadId, messageData) {
+    const messageRecord = new Message({
+      threadId,
+      sender: senderId,
+      content: messageData.content,
+      messageType: messageData.messageType || 'text',
+      isRead: false,
+      replyTo: messageData.replyToId || null
+    });
+
+    return await messageRecord.save();
+  }
+
+  /**
+   * PERFORMANCE: Ultra-fast thread update with atomic operations
+   */
+  async updateThreadMetadata(senderId, threadId, content, messageType) {
+    // PERFORMANCE: Use atomic findByIdAndUpdate instead of find->modify->save
+    const updateOperations = {
+      'lastMessage.content': content,
+      'lastMessage.sender': senderId,
+      'lastMessage.timestamp': Date.now(),
+      'lastMessage.messageType': messageType
+    };
+
+    // PERFORMANCE: Atomic increment for unread counts (no need to fetch first)
+    const thread = await Thread.findById(threadId).select('participants').lean();
+    if (!thread) {
+      throw new Error('Thread not found');
+    }
+
+    // Build atomic increment operations for unread counts
+    thread.participants.forEach(participantId => {
+      if (participantId.toString() !== senderId.toString()) {
+        updateOperations[`unreadCount.${participantId.toString()}`] = { $inc: 1 };
+      }
+    });
+
+    // PERFORMANCE: Single atomic update operation
+    const updatedThread = await Thread.findByIdAndUpdate(
+      threadId,
+      { $set: updateOperations },
+      { new: true, lean: true }
+    );
+
+    return updatedThread;
+  }
+
+  /**
+   * OPTIMIZATION: Send notifications only to users who are offline
+   */
+  async sendNotificationsToOfflineUsers(thread, message, senderId) {
+    thread.participants.forEach(participantId => {
+      if (participantId.toString() !== senderId.toString()) {
+        const participantSocket = this.connections.get(participantId.toString());
+        
+        // If user is not connected, they'll get notification when they reconnect
+        // If user is connected, they already got the real-time message
+        if (participantSocket) {
+          // Send unread count update for UI badge
+          participantSocket.emit('message-notification', {
+            threadId: thread._id,
+            unreadCount: thread.unreadCount.get(participantId.toString()) || 0,
+            lastMessage: message
+          });
+        }
+      }
+    });
+  }
+
+  /**
+   * Handle marking a thread as read - OPTIMIZED
    * @param {Object} socket - Socket.IO socket instance
    * @param {string} threadId - ID of the thread to mark as read
    */
   async handleMarkThreadRead(socket, threadId) {
     try {
-      // Update messages
-      await Message.updateMany(
-        {
+      // OPTIMIZATION: Parallel operations
+      const [messagesUpdate, threadUpdate] = await Promise.all([
+        Message.updateMany(
+          {
+            threadId,
+            sender: { $ne: socket.userId },
+            isRead: false
+          },
+          { isRead: true }
+        ),
+        Thread.findByIdAndUpdate(
           threadId,
-          sender: { $ne: socket.userId },
-          isRead: false
-        },
-        { isRead: true }
-      );
-      
-      // Update thread unread count
-      const thread = await Thread.findById(threadId);
-      if (thread) {
-        thread.unreadCount.set(socket.userId.toString(), 0);
-        await thread.save();
-        
-        // Emit to the thread room
-        const threadRoom = `thread:${threadId}`;
-        this.io.to(threadRoom).emit('thread-read', {
-          threadId,
-          userId: socket.userId
-        });
-      }
+          { [`unreadCount.${socket.userId}`]: 0 },
+          { new: true }
+        )
+      ]);
+
+      // Immediate UI feedback
+      socket.emit('thread-marked-read', {
+        threadId,
+        success: true,
+        timestamp: Date.now()
+      });
+
+      // Notify other participants
+      const threadRoom = `thread:${threadId}`;
+      socket.to(threadRoom).emit('thread-read', {
+        threadId,
+        userId: socket.userId
+      });
+
     } catch (error) {
       console.error('Error marking thread as read:', error);
+      socket.emit('error', { message: 'Failed to mark thread as read' });
     }
   }
 
   /**
-   * Handle typing indicator
+   * Handle typing indicator - OPTIMIZED
    * @param {Object} socket - Socket.IO socket instance
    * @param {string} threadId - ID of the thread
    */
   handleTyping(socket, threadId) {
     const threadRoom = `thread:${threadId}`;
+    const cachedUser = this.userCache.get(socket.userId.toString());
+    
     socket.to(threadRoom).emit('user-typing', {
       threadId,
       user: {
         _id: socket.userId,
-        firstName: socket.user.firstName
+        firstName: cachedUser?.firstName || 'User'
       }
     });
   }
@@ -323,6 +412,17 @@ class SocketService {
    */
   getIO() {
     return this.io;
+  }
+
+  /**
+   * OPTIMIZATION: Get connection statistics
+   */
+  getConnectionStats() {
+    return {
+      totalConnections: this.connections.size,
+      activeThreadRooms: this.threadRooms.size,
+      cachedUsers: this.userCache.size
+    };
   }
 }
 

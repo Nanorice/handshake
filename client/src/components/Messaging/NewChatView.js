@@ -286,35 +286,12 @@ const NewChatView = ({ thread, onSendMessage, onBack, isMobile, currentUserId, s
     socketService.subscribeToThread(currentThreadId, onNewMessageWrapper);
     socketService.onMessageNotification(onMessageNotificationWrapper); 
     
-    // NEW - Set up periodic check for new messages in addition to room rejoin
-    // This acts as a safeguard for missed real-time messages
-    const messageCheckInterval = setInterval(() => {
-      if (socketService.isSocketConnected() && currentThreadId) {
-        // Check if we have any last received message for this thread directly in socketService
-        const lastMsg = socketService.getLastReceivedMessage(currentThreadId);
-        const hasProcessedMissedMessages = checkForMissedMessagesRef.current();
-        
-        if (lastMsg && !hasProcessedMissedMessages) {
-          console.log(`[NewChatView] Periodic check found last message in socketService for thread: ${currentThreadId}, forcing update`);
-          socketService.forceMessageUpdate(currentThreadId);
-        }
-      }
-    }, 5000); // Check every 5 seconds
-    
-    // Keep the existing room rejoin interval
-    const roomRejoinInterval = setInterval(() => {
-      if (socketService.isSocketConnected() && currentThreadId) {
-        console.log(`[NewChatView] Periodic thread room rejoin emit for thread: ${currentThreadId}`);
-        socketService.emitEvent('join-thread', currentThreadId);
-      }
-    }, 15000); // Check every 15 seconds
+    // PERFORMANCE: Remove excessive polling - socket events are reliable
 
     return () => {
       console.log(`[NewChatView] useEffect (subscriptions): Cleaning up for thread: ${currentThreadId}, component ID: ${componentId}`);
       socketService.unsubscribeFromThread(currentThreadId);
       socketService.removeListener('message-notification', onMessageNotificationWrapper); // Use the same wrapper instance
-      clearInterval(roomRejoinInterval);
-      clearInterval(messageCheckInterval);
     };
   }, [thread?._id, socketConnected, currentUserId]); // Dependencies are now more stable
 

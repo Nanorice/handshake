@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ✨ Smooth Theme Transitions */
+* {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
 /* React Chat Elements styles */
 .rce-container-mlist {
   height: 100%;

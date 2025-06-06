@@ -120,7 +120,15 @@ export const MessageProvider = ({ children, threadId, userId }) => {
 
     // Message handler for the current thread
     const handleNewMessage = (message) => {
-      console.log(`[MessageProvider DEBUG] handleNewMessage called with:`, JSON.stringify(message).substring(0, 200));
+      console.log(`🔍 [MessageProvider DEBUG] handleNewMessage called with:`, {
+        hasMessage: !!message,
+        messageId: message?._id,
+        threadId: message?.threadId,
+        content: message?.content?.substring(0, 30),
+        sender: message?.sender,
+        currentThreadId: threadId,
+        timestamp: new Date().toISOString()
+      });
       
       if (!message) {
         console.error('[MessageProvider] Received undefined message');
@@ -240,72 +248,38 @@ export const MessageProvider = ({ children, threadId, userId }) => {
         console.error('[MessageProvider] Error adding to persistent handlers:', err);
       }
       
-      // 4. Register for additional socket events that might carry messages
-      console.log('[MessageProvider DEBUG] Setting up additional socket event listeners');
+      // 4. OPTIMIZED: Register only primary socket event for messages (removed redundant handlers)
+      console.log('[MessageProvider DEBUG] Setting up optimized socket event listener');
       
       try {
+        // OPTIMIZATION: Use only 'new-message' event to avoid duplicate processing
         socketService.on('new-message', handleNewMessage);
-        socketService.on('message-notification', handleNewMessage);
-        socketService.on('thread-message', handleNewMessage);
-        socketService.on('message', handleNewMessage);
+        console.log('[MessageProvider DEBUG] Registered primary new-message handler');
       } catch (err) {
-        console.error('[MessageProvider] Error setting up socket listeners:', err);
+        console.error('[MessageProvider] Error setting up socket listener:', err);
       }
     };
     
     // Set up the socket connection and listeners
     setupSocketConnection();
     
-    // Force a message refresh periodically as backup - reduced frequency and randomness
+    // OPTIMIZED: Smart emergency polling - only when connection has issues
     const intervalId = setInterval(() => {
-      // Save current scroll position properly using the scrollPositionManager
-      const messageContainer = document.getElementById('message-thread-container');
-      if (messageContainer && threadId) {
-        // Use the existing saveScrollPosition utility instead of DIY solution
-        saveScrollPosition('message-thread-container', threadId);
-      }
-      
-      if (socketService.isSocketConnected()) {
-        // Only request updates once per minute instead of every 5 seconds
-        if (Date.now() % 60000 < 5000) {
-          console.log('[MessageProvider DEBUG] Requesting thread update from server');
-          socketService.emitEvent('request-thread-update', threadId);
-        }
-        
-        // Poll server directly much less frequently (only every ~30 seconds)
-        // and only if we haven't received messages recently
-        const lastMessageTime = messages.length > 0 ? 
-          new Date(messages[messages.length - 1].createdAt).getTime() : 0;
-        const timeSinceLastMessage = Date.now() - lastMessageTime;
-        
-        if (timeSinceLastMessage > 30000 && Math.random() > 0.7) {
-          pollServerForMessages().then(() => {
-            // Restore scroll position after update using the scrollPositionManager
-            setTimeout(() => {
-              if (messageContainer && threadId) {
-                restoreScrollPosition('message-thread-container', threadId);
-              }
-            }, 100);
-          });
-        }
-      } else {
-        console.log('[MessageProvider DEBUG] Socket not connected, reconnecting and polling');
+      if (!socketService.isSocketConnected()) {
+        console.log('[MessageProvider] Socket disconnected, attempting reconnect');
         socketService.connect();
-        // Only poll if we've been disconnected for a while
-        if (Math.random() > 0.5) {
-          pollServerForMessages().then(() => {
-            // Restore scroll position after update using the scrollPositionManager
-            setTimeout(() => {
-              if (messageContainer && threadId) {
-                restoreScrollPosition('message-thread-container', threadId);
-              }
-            }, 100);
-          });
-        }
+        pollServerForMessages();
+      } else if (socketService.hasConnectionIssues()) {
+        // SMART POLLING: Only poll when connection is unstable
+        console.log('[MessageProvider] Connection issues detected, emergency polling');
+        pollServerForMessages();
+      } else {
+        // CONNECTION HEALTHY: Skip polling, rely on real-time socket events
+        console.log('[MessageProvider] Connection healthy, skipping emergency poll');
       }
-    }, 10000); // Poll every 10 seconds instead of 5
+    }, 15000); // Check every 15 seconds (reduced from 30s for better responsiveness)
     
-    // Initial polling to ensure we have the latest messages
+    // CRITICAL: Initial polling to ensure we have messages
     pollServerForMessages();
 
     // Clean up listeners when thread changes or component unmounts
@@ -322,14 +296,12 @@ export const MessageProvider = ({ children, threadId, userId }) => {
         console.error('[MessageProvider] Error removing from persistent handlers:', err);
       }
       
-      // 2. Remove regular socket listeners
+      // 2. OPTIMIZED: Remove only primary socket listener (matches registration)
       try {
         socketService.off('new-message', handleNewMessage);
-        socketService.off('message-notification', handleNewMessage);
-        socketService.off('thread-message', handleNewMessage);
-        socketService.off('message', handleNewMessage);
+        console.log('[MessageProvider DEBUG] Removed primary new-message handler');
       } catch (err) {
-        console.error('[MessageProvider] Error removing socket listeners:', err);
+        console.error('[MessageProvider] Error removing socket listener:', err);
       }
       
       // 3. Unsubscribe from thread-specific messages

@@ -277,11 +277,26 @@ const sendMessage = async (req, res) => {
       // Construct the thread room ID
       const threadRoomId = `thread:${threadId}`;
       
-      console.log(`Emitting new-message to room ${threadRoomId}`);
+      console.log(`[MESSAGE_CONTROLLER] Emitting new-message to room ${threadRoomId} for message:`, {
+        messageId: populatedMessage._id,
+        content: populatedMessage.content.substring(0, 50) + '...',
+        sender: populatedMessage.sender._id
+      });
+      
+      // Get connected clients in this room for debugging
+      req.io.in(threadRoomId).allSockets().then(clients => {
+        console.log(`[MESSAGE_CONTROLLER] Clients in room ${threadRoomId}: ${Array.from(clients).join(', ')}`);
+        if (clients.size === 0) {
+          console.warn(`[MESSAGE_CONTROLLER] No clients in room ${threadRoomId}! Message will not be received in real-time.`);
+        }
+      }).catch(err => {
+        console.error(`[MESSAGE_CONTROLLER] Error getting clients in room:`, err);
+      });
       
       req.io.to(threadRoomId).emit('new-message', populatedMessage);
+      console.log(`[MESSAGE_CONTROLLER] Socket emission completed for room ${threadRoomId}`);
     } else {
-      console.warn('Socket.io not available on request object');
+      console.warn('[MESSAGE_CONTROLLER] Socket.io not available on request object - real-time messaging disabled');
     }
     
     res.status(201).json({

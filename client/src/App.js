@@ -33,6 +33,9 @@ import DirectTester from './components/DirectTester';
 import { NotificationProvider, useNotification } from './contexts/NotificationContext';
 import { InvitationProvider, useInvitation } from './contexts/InvitationContext';
 import SimpleInvitationPage from './pages/SimpleInvitationPage';
+import { MessageProvider } from './contexts/MessageProvider';
+import { GlobalMessageProvider } from './contexts/GlobalMessageContext';
+
 
 // Helper function for direct auth check
 function checkDirectAuth() {
@@ -323,6 +326,8 @@ function AppRoutes() {
           onNavigate={handleNavigateToInvitation}
         />
       )}
+      
+
     </>
   );
 }
@@ -439,15 +444,19 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <NotificationProvider>
-          <InvitationProvider>
-            <MuiThemeWrapper>
-              <Router>
-                <AppRoutes />
-              </Router>
-            </MuiThemeWrapper>
-          </InvitationProvider>
-        </NotificationProvider>
+        <GlobalMessageProvider>
+          <NotificationProvider>
+            <InvitationProvider>
+              <MessageProvider>
+                <MuiThemeWrapper>
+                  <Router>
+                    <AppRoutes />
+                  </Router>
+                </MuiThemeWrapper>
+              </MessageProvider>
+            </InvitationProvider>
+          </NotificationProvider>
+        </GlobalMessageProvider>
       </AuthProvider>
     </ThemeProvider>
   );

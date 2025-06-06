@@ -307,7 +307,32 @@ const sendMessage = async (threadId, content, attachments = [], replyToId = null
     const response = await authAxios.post(`/threads/${threadId}`, messageData);
     
     if (response.data && response.data.status === 'success') {
-      return response.data.data.message;
+      const savedMessage = response.data.data.message;
+      
+      // BACKUP: Also send via socket to ensure real-time delivery
+      // This provides redundancy in case server-side socket emission fails
+      try {
+        console.log('[messageService] Sending backup socket message for real-time delivery');
+        socketService.sendMessage(threadId, {
+          content,
+          replyToId,
+          messageType: replyToId ? 'reply' : (attachments.length > 0 ? 'file' : 'text'),
+          _id: savedMessage._id, // Use the real message ID from server
+          sender: savedMessage.sender,
+          createdAt: savedMessage.createdAt,
+          file: attachments.length > 0 ? {
+            fileName: attachments[0].name,
+            fileType: attachments[0].type,
+            fileSize: attachments[0].size,
+            filePath: attachments[0].url || ''
+          } : null
+        });
+      } catch (socketError) {
+        console.warn('[messageService] Backup socket emission failed:', socketError);
+        // This is non-critical since the message is already saved via HTTP
+      }
+      
+      return savedMessage;
     }
     
     return null;

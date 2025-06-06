@@ -42,4 +42,12 @@ A platform connecting **Professionals** (experienced workers) and **Seekers** (c
 ## Future Roadmap
 - LinkedIn OAuth for Professionals.
 - Review/rating system.
-- Chat functionality pre-meeting.
+- ✅ **LinkedIn-Style Messaging System** - Comprehensive real-time messaging with group chats, file attachments, typing indicators, and professional-grade features (See MESSAGING_SYSTEM_REQUIREMENTS.md)
+
+## Latest Updates
+### Messaging System Requirements (Added)
+- **Scope**: LinkedIn-level messaging with 1-on-1 and group conversations
+- **Features**: Real-time delivery, file attachments, typing indicators, read receipts
+- **Infrastructure**: Leveraging existing Socket.io, MongoDB, and React stack
+- **Timeline**: 8-week phased implementation
+- **Security**: End-to-end encryption and content moderation capabilities

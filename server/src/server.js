@@ -169,6 +169,16 @@ socketService.getIO().on('connection', (socket) => {
       });
     });
   });
+
+  // OPTIMIZATION: Add heartbeat mechanism for connection health
+  socket.on('ping', () => {
+    socket.emit('pong');
+  });
+
+  socket.on('pong', () => {
+    // Client responded to ping, connection is healthy
+    console.log(`[SOCKET] Received pong from user ${socket.userId}`);
+  });
   
   // Handle leaving specific thread rooms
   socket.on('leave-thread', (threadId) => {
@@ -186,12 +196,27 @@ socketService.getIO().on('connection', (socket) => {
       // const isCustomId = threadId.startsWith('thread_'); // Example for custom ID check if needed elsewhere
 
       if (isMongoId) {
-        // For MongoDB backed threads, we assume the client is also POSTing to the REST API
-        // (/api/messages/threads/:threadId) which handles saving to DB and emitting the 'new-message'
-        // event via req.io. Therefore, this socket handler should not re-process (save or emit again)
-        // to avoid duplication.
-        console.log(`[SOCKET] send-message for MongoID thread ${threadId}. Processing (save & emit) is handled by the REST API controller. This socket event will be ignored here to prevent duplication.`);
-        return; // Exit early for MongoID threads.
+        // For MongoDB backed threads, we typically rely on the REST API controller for save & emit.
+        // However, if the message already has an _id, it means it's a backup/redundant socket emission
+        // from the client to ensure real-time delivery in case the HTTP controller emission failed.
+        if (message._id && message.sender) {
+          console.log(`[SOCKET] Backup socket emission for saved message ${message._id} in thread ${threadId}`);
+          
+          // This is a backup emission - just broadcast without saving to DB
+          const threadRoomId = `thread:${threadId}`;
+          const messageToEmit = {
+            ...message,
+            threadId
+          };
+          
+          console.log(`[SOCKET] Broadcasting backup message to room ${threadRoomId}`);
+          socketService.getIO().to(threadRoomId).emit('new-message', messageToEmit);
+          return;
+        } else {
+          // Original message without _id - let HTTP handle it
+          console.log(`[SOCKET] Original send-message for MongoID thread ${threadId}. Processing will be handled by REST API controller.`);
+          return;
+        }
       }
       
       // If it's NOT a MongoID thread (e.g., a custom temporary threadId or other logic):

@@ -13,6 +13,8 @@ alwaysApply: true
     *   Code MUST be reviewed for security and performance issues before merging.
     *   Backward compatibility with existing API endpoints MUST be maintained.
 3.  Tests MUST be written for critical functionality.
+4.  Must document All critical updates
+5.  Must complete my request thoroughly and must not stop half way
 
 #### Frontend Development
 1.  React components MUST be functional components.

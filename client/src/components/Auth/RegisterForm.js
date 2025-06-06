@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
+import ThemeToggle from '../ThemeToggle';
 
 const RegisterForm = () => {
   const navigate = useNavigate();
@@ -37,34 +38,7 @@ const RegisterForm = () => {
           Handshake
         </div>
         
-        <button
-          onClick={toggleTheme}
-          style={{
-            background: 'none',
-            border: `1px solid ${currentTheme.border}`,
-            borderRadius: '6px',
-            padding: '6px',
-            color: currentTheme.textSecondary,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.color = currentTheme.text;
-            e.target.style.borderColor = currentTheme.textSecondary;
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.color = currentTheme.textSecondary;
-            e.target.style.borderColor = currentTheme.border;
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            {isDarkMode ? (
-              <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-            ) : (
-              <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-            )}
-          </svg>
-        </button>
+        <ThemeToggle variant="animated" size="small" />
       </header>
 
       {/* Main Content */}

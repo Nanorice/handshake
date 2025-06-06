@@ -29,6 +29,7 @@ import { useAuth } from '../contexts/AuthContext';
 import socketService from '../services/socketService';
 import { getUserType } from '../utils/authUtils';
 import { getInvitationNotifications } from '../services/invitationService';
+import NotificationCenter from './NotificationCenter';
 
 // Add direct check function similar to App.js
 const checkDirectAuth = () => {
@@ -324,6 +325,9 @@ const Navbar = () => {
                 Admin
               </Button>
             )}
+
+            {/* Notification Center - only for authenticated users */}
+            {directlyAuthenticated && <NotificationCenter />}
 
             {/* Dark Mode Toggle */}
             <Tooltip title={`Toggle ${isDarkMode ? 'light' : 'dark'} mode`}>
