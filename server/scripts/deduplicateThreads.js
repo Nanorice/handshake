@@ -6,7 +6,7 @@ const Thread = require('../src/models/Thread');
 const Message = require('../src/models/Message');
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/handshake', {
+mongoose.connect(process.env.MONGODB_URI || 'process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0'', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })

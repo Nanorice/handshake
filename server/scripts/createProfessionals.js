@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 // Connect to the database
-mongoose.connect('mongodb://localhost:27017/test')
+mongoose.connect('process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0'')
   .then(async () => {
     console.log('Connected to MongoDB');
     console.log('Database:', mongoose.connection.db.databaseName);

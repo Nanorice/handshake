@@ -5,7 +5,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 // Connect to MongoDB
-const connectionString = process.env.MONGODB_URI || 'mongodb://localhost:27017/test';
+const connectionString = process.env.MONGODB_URI || 'process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0'';
 console.log(`Connecting to MongoDB using: ${connectionString}`);
 
 (async () => {

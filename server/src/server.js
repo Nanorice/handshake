@@ -18,39 +18,11 @@ console.log(`Configuring server to use port: ${PORT}`);
 // Create HTTP server
 const server = http.createServer(app);
 
-// MongoDB connection with fallback options
-const connectToMongoDB = async () => {
-  const mongoOptions = {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  };
-
-  // Try multiple connection strings in order of preference
-  const connectionStrings = [
-    process.env.MONGODB_URI, // First try environment variable
-    // If no env var, try Atlas connection since it was working with quick-start
-    'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0',
-    'mongodb://localhost:27017/handshake', // Then try local MongoDB
-    'mongodb://127.0.0.1:27017/handshake' // Alternative local address
-  ].filter(Boolean); // Remove undefined values
-
-  for (const connectionString of connectionStrings) {
-    try {
-      console.log(`Attempting to connect to MongoDB: ${connectionString.replace(/\/\/.*@/, '//***:***@')}`);
-      await mongoose.connect(connectionString, mongoOptions);
-      console.log('Successfully connected to MongoDB database');
-      return true;
-    } catch (error) {
-      console.warn(`Failed to connect to ${connectionString.replace(/\/\/.*@/, '//***:***@')}: ${error.message}`);
-      if (connectionString === connectionStrings[connectionStrings.length - 1]) {
-        throw error; // Throw error only on the last attempt
-      }
-    }
-  }
-};
+// Import centralized database configuration
+const { connectToDatabase } = require('./config/database');
 
 // Connect to MongoDB with proper error handling
-connectToMongoDB()
+connectToDatabase()
   .then(() => {
     // Start server after DB connection - ensure we use the PORT variable
     server.listen(PORT, () => {

@@ -17,9 +17,9 @@ async function checkDbConnection() {
   console.log('- MONGO_URI:', process.env.MONGO_URI ? 'Set (hidden for security)' : 'Not set');
   
   // Determine which connection string to use
-  const connectionString = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/test';
+  const connectionString = process.env.MONGODB_URI || process.env.MONGO_URI || 'process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0'';
   console.log('\nConnection string being used (fallback if none set):', 
-              connectionString === 'mongodb://localhost:27017/test' ? 'mongodb://localhost:27017/test' : 'Custom URI (hidden)');
+              connectionString === 'process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0'' ? 'process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0'' : 'Custom URI (hidden)');
   
   try {
     // Connect to the database
@@ -77,7 +77,7 @@ async function checkDbConnection() {
     // FIXME: Create consistent environment variables and update code to use them
     console.log('\n----- Recommended Actions -----');
     console.log('1. Create a .env file in the server directory with:');
-    console.log('   MONGODB_URI=mongodb://localhost:27017/handshake');
+    console.log('   MONGODB_URI=process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0'');
     console.log('2. Update all code to consistently use MONGODB_URI');
     console.log('3. Ensure the seeding scripts use the same connection string as the server');
     

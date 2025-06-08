@@ -11,7 +11,7 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 // MongoDB Connection URL
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/test';
+const MONGODB_URI = process.env.MONGODB_URI || 'process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0'';
 
 // Connect to MongoDB
 mongoose.connect(MONGODB_URI)

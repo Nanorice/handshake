@@ -41,7 +41,7 @@ class SocketService {
       'typing-stopped': new Set()
     };
   }
-
+    
   get socket() {
     return this._socket;
   }
@@ -74,19 +74,19 @@ class SocketService {
           auth: { token: authToken },
           transports: ['websocket', 'polling'],
           timeout: 10000,
-          reconnection: true,
+      reconnection: true,
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
           forceNew: false
         });
 
-        this._socket.on('connect', () => {
+    this._socket.on('connect', () => {
           console.log('[socketService] Connected successfully');
-          this.connected = true;
-          this.connectionAttempts = 0;
-          this.isReconnecting = false;
-          
+      this.connected = true;
+      this.connectionAttempts = 0;
+      this.isReconnecting = false;
+      
           // OPTIMIZATION: Reset connection health on successful connection
           this.connectionHealth.lastHeartbeat = Date.now();
           this.connectionHealth.missedHeartbeats = 0;
@@ -94,7 +94,7 @@ class SocketService {
           this.connectionHealth.lastMessageReceived = Date.now();
           
           // Process queued messages immediately
-          this.processMessageQueue();
+      this.processMessageQueue();
           resolve();
         });
 
@@ -108,12 +108,12 @@ class SocketService {
           
           if (this.eventHandlers.has('disconnect')) {
             this.eventHandlers.get('disconnect').forEach(handler => handler(reason));
-          }
-        });
+      }
+    });
 
-        this._socket.on('connect_error', (error) => {
+    this._socket.on('connect_error', (error) => {
           console.error('[socketService] Connection error:', error);
-          this.connected = false;
+      this.connected = false;
           this.connectionAttempts++;
           
           if (this.connectionAttempts >= this.maxConnectionAttempts) {
@@ -191,9 +191,9 @@ class SocketService {
             } catch (error) {
               console.error('[socketService] PersistentHandler error:', error);
             }
-          });
-        });
-
+      });
+    });
+    
         this._socket.on('invitation-notification', (notification) => {
           console.log('[socketService] invitation-notification received:', notification);
           if (this.eventHandlers.has('invitation-notification')) {

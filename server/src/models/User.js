@@ -46,6 +46,51 @@ const userSchema = new mongoose.Schema({
     trim: true,
     required: false
   },
+  // GridFS file references
+  profilePhoto: {
+    fileId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: false
+    },
+    filename: {
+      type: String,
+      required: false
+    },
+    originalName: {
+      type: String,
+      required: false
+    },
+    contentType: {
+      type: String,
+      required: false
+    },
+    uploadDate: {
+      type: Date,
+      required: false
+    }
+  },
+  cv: {
+    fileId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: false
+    },
+    filename: {
+      type: String,
+      required: false
+    },
+    originalName: {
+      type: String,
+      required: false
+    },
+    contentType: {
+      type: String,
+      required: false
+    },
+    uploadDate: {
+      type: Date,
+      required: false
+    }
+  },
   status: {
     type: String,
     enum: ['active', 'inactive', 'suspended'],

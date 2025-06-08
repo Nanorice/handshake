@@ -1,7 +1,22 @@
 {
+  "name": "handshake-full-stack",
+  "version": "1.0.0",
+  "description": "Full-stack professional networking platform",
+  "scripts": {
+    "start": "npm run start:client",
+    "start:client": "cd client && npm start",
+    "start:server": "cd server && npm start",
+    "dev:server": "cd server && npm run dev",
+    "dev": "concurrently \"npm run dev:server\" \"npm run start:client\"",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "build": "cd client && npm run build"
+  },
   "dependencies": {
     "node-fetch": "^3.3.2",
     "react-avatar-editor": "^13.0.2",
     "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
   }
-}
+} 

@@ -11,7 +11,7 @@ const getRandomItem = (array) => array[Math.floor(Math.random() * array.length)]
 const seedMessages = async () => {
   try {
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/handshake', {
+    await mongoose.connect(process.env.MONGODB_URI || 'process.env.MONGODB_URI || 'mongodb+srv://loveohara:l07WI2DtfaZYyLrm@cluster0.fgmlgyv.mongodb.net/handshake?retryWrites=true&w=majority&appName=Cluster0'', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
