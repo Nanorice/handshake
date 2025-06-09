@@ -143,7 +143,23 @@ const ReplyPreview = ({ originalMessage, darkMode }) => {
 // Replace the Message component completely with this version supporting attachments and replies
 const Message = ({ message, isCurrentUser, darkMode, allMessages, onReply }) => {
   const hasAttachments = message.attachments && message.attachments.length > 0;
-  const hasContent = message.content && message.content.trim() !== '';
+  
+  // CRITICAL FIX: Ensure content is always a string and trim any trailing spaces
+  const messageContent = message.content || '';
+  const safeContent = typeof messageContent === 'string' ? messageContent.trim() : String(messageContent || '').trim();
+  const hasContent = safeContent !== '';
+  
+  // Debug: Log content details to identify spacing issues
+  if (isCurrentUser && safeContent) {
+    console.log('Message content debug:', {
+      raw: JSON.stringify(messageContent),
+      safe: JSON.stringify(safeContent),
+      length: safeContent.length,
+      ends: `"${safeContent.slice(-5)}"`,
+      chars: safeContent.split('').map(c => c.charCodeAt(0))
+    });
+  }
+  
   const isReply = message.messageType === 'reply' && message.replyTo;
   
   // Find the original message if this is a reply
@@ -170,7 +186,10 @@ const Message = ({ message, isCurrentUser, darkMode, allMessages, onReply }) => 
       <Box
         sx={{
           maxWidth: '70%',
-          position: 'relative'
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: isCurrentUser ? 'flex-end' : 'flex-start',
         }}
       >
         {/* Reply action button */}
@@ -227,13 +246,16 @@ const Message = ({ message, isCurrentUser, darkMode, allMessages, onReply }) => 
         {hasContent && (
           <Box
             sx={{
-              p: 2,
+              px: 1.5,
+              py: 0.75,
               borderRadius: 2,
               backgroundColor: isCurrentUser
                 ? 'primary.main' 
                 : darkMode ? 'background.paper' : 'grey.200',
               color: isCurrentUser ? 'white' : 'text.primary',
               opacity: message.isLocal ? 0.7 : 1,
+              width: 'fit-content',
+              maxWidth: '100%',
               ':hover': {
                 '& .reply-button': {
                   opacity: 0.7
@@ -241,7 +263,19 @@ const Message = ({ message, isCurrentUser, darkMode, allMessages, onReply }) => 
               }
             }}
           >
-            <Typography>{message.content}</Typography>
+            <Typography 
+              variant="body2"
+              sx={{ 
+                whiteSpace: 'pre-wrap', 
+                wordBreak: 'break-word',
+                margin: 0,
+                lineHeight: 1.3,
+                padding: 0,
+                fontSize: '0.9rem'
+              }}
+            >
+              {safeContent}
+            </Typography>
           </Box>
         )}
         
@@ -323,10 +357,9 @@ const MessageThread = ({
     };
   }, [thread?._id]);
 
-  // Scroll to bottom on new messages, but only if we're already near the bottom
+  // Optimized scroll management to prevent jumping
   useEffect(() => {
-    // We should only auto-scroll if user is already near the bottom
-    // or if the new message is from the current user
+    // Only auto-scroll if appropriate, with debouncing to prevent rapid scrolling
     const shouldScrollToBottom = () => {
       if (!messagesEndRef.current) return false;
       
@@ -341,18 +374,26 @@ const MessageThread = ({
       
       // Get the last message and check if it's from current user
       const lastMessage = messages[messages.length - 1];
-      const isLastMessageFromCurrentUser = lastMessage?.sender?._id === currentUserId;
+      const isLastMessageFromCurrentUser = lastMessage?.sender?._id === currentUserId || 
+                                         lastMessage?.sender === currentUserId;
       
-      // Auto-scroll if user is already near the bottom (within 300px)
+      // Auto-scroll if user is already near the bottom (within 200px - reduced for better UX)
       // or if the new message is from the current user (we just sent it)
-      return distanceFromBottom < 300 || isLastMessageFromCurrentUser;
+      return distanceFromBottom < 200 || isLastMessageFromCurrentUser;
     };
     
-    // Only scroll if appropriate
-    if (messages.length > 0 && shouldScrollToBottom()) {
-      scrollToBottom();
+    // Use requestAnimationFrame for smoother scrolling
+    if (messages.length > 0) {
+      requestAnimationFrame(() => {
+        if (shouldScrollToBottom()) {
+          scrollToBottom();
+        } else {
+          // If not auto-scrolling, restore saved position
+          restoreScrollPosition('message-thread-container', thread._id);
+        }
+      });
     }
-  }, [messages, currentUserId]);
+  }, [messages, currentUserId, thread?._id]);
 
   // Setup socket listeners for typing indicators
   useEffect(() => {
@@ -387,13 +428,13 @@ const MessageThread = ({
     return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
   };
 
-  // Scroll to bottom of message list - make it smoother to prevent jumpy behavior
+  // Optimized scroll to bottom - prevents jumping during re-renders
   const scrollToBottom = () => {
     try {
       if (messagesEndRef.current) {
-        // Create a smoother scroll behavior
+        // Use immediate scroll for better performance and less jumping
         messagesEndRef.current.scrollIntoView({ 
-          behavior: 'smooth', 
+          behavior: 'auto', // Changed from 'smooth' to 'auto' for instant scroll
           block: 'end'
         });
       }
@@ -512,7 +553,11 @@ const MessageThread = ({
             <Message 
               key={message._id || `local-${index}`} 
               message={message}
-              isCurrentUser={message.sender?._id === currentUserId}
+              isCurrentUser={
+                message.sender === currentUserId || 
+                message.sender?._id === currentUserId ||
+                (typeof message.sender === 'object' && message.sender._id === currentUserId)
+              }
               darkMode={darkMode}
               allMessages={messages}
               onReply={handleReplyToMessage}

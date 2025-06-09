@@ -40,10 +40,10 @@ export const MessageProvider = ({ children, threadId, userId }) => {
     const senderId = typeof senderInfo === 'string' ? senderInfo : (senderInfo._id || message.senderId);
     const senderName = senderInfo.firstName || senderInfo.name || 'Unknown';
 
-    // CRITICAL FIX: Ensure content is always a string and trim trailing spaces
+    // CRITICAL FIX: Ensure content is always a string to prevent trim() errors
     const messageContent = message.content;
-    const validContent = typeof messageContent === 'string' ? messageContent.trim() : 
-                        (messageContent ? String(messageContent).trim() : '');
+    const validContent = typeof messageContent === 'string' ? messageContent : 
+                        (messageContent ? String(messageContent) : '');
 
     return {
       _id: message._id || message.tempId || `temp-${Date.now()}-${Math.random()}`,
@@ -83,7 +83,7 @@ export const MessageProvider = ({ children, threadId, userId }) => {
         
         // Check by content + sender + time (within 10 seconds)
         if (existing.content === normalizedMessage.content && 
-            existing.sender === normalizedMessage.sender) {
+            existing.sender?._id === normalizedMessage.sender?._id) {
           const timeDiff = Math.abs(
             new Date(existing.createdAt).getTime() - 
             new Date(normalizedMessage.createdAt).getTime()
@@ -230,22 +230,17 @@ export const MessageProvider = ({ children, threadId, userId }) => {
     };
   }, [threadId, handleNewMessage]);
 
-  // Optimized send message function with immediate UI update - FIXED to handle proper parameters
-  const sendMessage = useCallback(async (content, attachments = [], replyToId = null, type = 'text') => {
-    // CRITICAL FIX: Ensure content is a string and trim any trailing spaces
-    const messageContent = typeof content === 'string' ? content.trim() : String(content || '').trim();
-    
-    if (!messageContent || !threadId) return null;
+  // Optimized send message function with immediate UI update
+  const sendMessage = useCallback(async (content, type = 'text') => {
+    if (!content.trim() || !threadId) return null;
 
     const tempId = `temp-${Date.now()}-${threadId}`;
     const tempMessage = {
       tempId,
-      content: messageContent, // Use validated and trimmed string content
+      content: String(content), // Ensure content is string
       sender: { _id: userId }, // Proper sender object structure
       threadId,
       type,
-      attachments: attachments || [],
-      replyTo: replyToId,
       createdAt: new Date().toISOString(),
       pending: true
     };
@@ -257,9 +252,8 @@ export const MessageProvider = ({ children, threadId, userId }) => {
     addMessageToState(tempMessage);
 
     try {
-      // CRITICAL FIX: Call messageService.sendMessage with correct parameter order
-      // messageService expects: sendMessage(threadId, content, attachments, replyToId)
-      const sentMessage = await messageService.sendMessage(threadId, messageContent, attachments || [], replyToId);
+      // Send via API
+      const sentMessage = await messageService.sendMessage(threadId, { content, type });
       
       // Remove temp message and add real message
       setMessages(prev => {

@@ -28,7 +28,9 @@ import {
   Alert,
   Avatar,
   Tabs,
-  Tab
+  Tab,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
@@ -65,6 +67,8 @@ const experienceLevels = [
 
 const ProfessionalDiscovery = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [professionals, setProfessionals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -282,25 +286,25 @@ const ProfessionalDiscovery = () => {
     try {
       setMatchRequestLoading(true);
       
-      // Create a proposed date one week from now
-      const proposedDate = new Date();
-      proposedDate.setDate(proposedDate.getDate() + 7);
+      // Get user data from localStorage
+      const userDataJson = localStorage.getItem('userData');
+      const userData = userDataJson ? JSON.parse(userDataJson) : {};
       
-      // Use the proper invitation API instead of messaging
+      // Simple coffee chat request without fake scheduling
       const result = await sendInvitation({
         receiverId: selectedProfessional._id,
         message: matchMessage,
+        type: 'coffee-chat-request', // Clear type for coffee chat
         sessionDetails: {
-          proposedDate: proposedDate.toISOString(),
-          duration: 30, // default 30 minute meeting
-          topic: "Coffee Chat Discussion"
+          topic: "Coffee Chat Discussion",
+          requestedBy: userData.id || userData._id || 'unknown'
         }
       });
       
       handleCloseDialog();
       setSnackbar({
         open: true,
-        message: 'Coffee chat invitation sent successfully!',
+        message: 'Coffee chat request sent successfully! The professional will respond with available times.',
         severity: 'success'
       });
       
@@ -309,10 +313,10 @@ const ProfessionalDiscovery = () => {
         navigate('/dashboard');
       }, 2000);
     } catch (error) {
-      console.error('Error sending coffee chat invite:', error);
+      console.error('Error sending coffee chat request:', error);
       setSnackbar({
         open: true,
-        message: `Failed to send invitation: ${error.message || 'Unknown error'}`,
+        message: `Failed to send request: ${error.message || 'Unknown error'}`,
         severity: 'error'
       });
     } finally {
@@ -569,8 +573,20 @@ const ProfessionalDiscovery = () => {
         </Box>
       )}
 
-      {/* Match Dialog */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      {/* Match Dialog - Mobile Optimized */}
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={useMediaQuery(theme.breakpoints.down('sm'))}
+        PaperProps={{
+          sx: {
+            m: useMediaQuery(theme.breakpoints.down('sm')) ? 0 : 2,
+            borderRadius: useMediaQuery(theme.breakpoints.down('sm')) ? 0 : 1,
+          }
+        }}
+      >
         <DialogTitle>
           <Tabs value={dialogTab} onChange={handleTabChange}>
             <Tab label="Connect" />

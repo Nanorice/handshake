@@ -125,6 +125,16 @@ Handshake is a professional networking platform that connects job seekers with i
   - Add pricing tiers and subscription management
   - Payment history and invoicing
 
+- [ ] **Advanced Scheduling System**
+  - Professional availability calendar management
+  - Time slot booking and conflict prevention
+  - Timezone handling and automatic conversion
+  - Recurring availability patterns
+  - Calendar integration (Google Calendar, Outlook)
+  - Automated scheduling confirmations
+  - Rescheduling and cancellation workflows
+  - Waitlist functionality for popular professionals
+
 - [ ] **Video Call Integration**
   - Zoom API integration for meeting links
   - Automatic meeting room generation

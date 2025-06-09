@@ -3,15 +3,33 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const { upload, uploadToGridFS, downloadFromGridFS, deleteFromGridFS, getFileInfo } = require('../config/gridfs');
+const { auth } = require('../middleware/auth');
+
+// Test route to verify file routes are loaded
+router.get('/test', (req, res) => {
+  res.json({ message: 'File routes are working!' });
+});
+
+// Test auth route to verify authentication is working
+router.get('/test-auth', auth, (req, res) => {
+  res.json({ 
+    message: 'Authentication is working in file routes!',
+    user: {
+      id: req.user._id,
+      email: req.user.email,
+      name: req.user.name
+    }
+  });
+});
 
 // Upload profile photo
-router.post('/upload/profile-photo', upload.single('profilePhoto'), async (req, res) => {
+router.post('/upload/profile-photo', auth, upload.single('profilePhoto'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const userId = req.user?.id || req.body.userId;
+    const userId = req.user?._id || req.body.userId;
     if (!userId) {
       return res.status(401).json({ error: 'User not authenticated' });
     }
@@ -51,7 +69,8 @@ router.post('/upload/profile-photo', upload.single('profilePhoto'), async (req, 
     res.json({
       success: true,
       message: 'Profile photo uploaded successfully',
-      file: {
+      data: {
+        url: `/api/files/file/${fileData.fileId}`,
         fileId: fileData.fileId,
         filename: fileData.filename,
         originalName: fileData.originalName,
@@ -72,7 +91,7 @@ router.post('/upload/cv', upload.single('cv'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const userId = req.user?.id || req.body.userId;
+    const userId = req.user?._id || req.body.userId;
     if (!userId) {
       return res.status(401).json({ error: 'User not authenticated' });
     }
@@ -126,23 +145,108 @@ router.post('/upload/cv', upload.single('cv'), async (req, res) => {
   }
 });
 
+// Upload Resume (alias for CV to match frontend expectations)
+router.post('/upload/resume', auth, upload.single('resume'), async (req, res) => {
+  try {
+    console.log('[Resume Upload] Starting upload process');
+    console.log('[Resume Upload] User from auth:', req.user ? `${req.user.email} (${req.user._id})` : 'No user');
+    console.log('[Resume Upload] File received:', req.file ? req.file.originalname : 'No file');
+    
+    if (!req.file) {
+      console.log('[Resume Upload] ERROR: No file in request');
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const userId = req.user?._id || req.body.userId;
+    if (!userId) {
+      console.log('[Resume Upload] ERROR: No user ID found');
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    console.log('[Resume Upload] Uploading to GridFS...');
+    // Upload file to GridFS
+    const fileData = await uploadToGridFS(req.file, {
+      userId: userId,
+      fileType: 'resume'
+    });
+    console.log('[Resume Upload] GridFS upload successful:', fileData);
+
+    // Update user with new resume reference
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log('[Resume Upload] ERROR: User not found in database');
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Delete old resume if it exists
+    if (user.resume && user.resume.fileId) {
+      try {
+        console.log('[Resume Upload] Deleting old resume:', user.resume.fileId);
+        await deleteFromGridFS(user.resume.fileId);
+      } catch (error) {
+        console.warn('[Resume Upload] Failed to delete old resume:', error.message);
+      }
+    }
+
+    // Save new resume reference
+    user.resume = {
+      fileId: fileData.fileId,
+      filename: fileData.filename,
+      originalName: fileData.originalName,
+      contentType: fileData.contentType,
+      uploadDate: new Date()
+    };
+
+    console.log('[Resume Upload] Saving user with new resume data...');
+    await user.save();
+    console.log('[Resume Upload] User saved successfully');
+
+    const responseData = {
+      success: true,
+      message: 'Resume uploaded successfully',
+      data: {
+        url: `/api/files/file/${fileData.fileId}`,
+        fileId: fileData.fileId,
+        filename: fileData.filename,
+        originalName: fileData.originalName,
+        contentType: fileData.contentType
+      }
+    };
+    
+    console.log('[Resume Upload] SUCCESS - Sending response:', responseData);
+    res.json(responseData);
+
+  } catch (error) {
+    console.error('[Resume Upload] FATAL ERROR:', error);
+    console.error('[Resume Upload] Error stack:', error.stack);
+    res.status(500).json({ error: error.message || 'Failed to upload resume' });
+  }
+});
+
 // Get file (profile photo or CV)
 router.get('/file/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
+    console.log('[File Download] Requested file ID:', fileId);
 
     if (!mongoose.Types.ObjectId.isValid(fileId)) {
+      console.log('[File Download] ERROR: Invalid file ID format');
       return res.status(400).json({ error: 'Invalid file ID' });
     }
 
+    console.log('[File Download] Getting file info from GridFS...');
     // Get file info
     const fileInfo = await getFileInfo(fileId);
     if (!fileInfo) {
+      console.log('[File Download] ERROR: File not found in GridFS');
       return res.status(404).json({ error: 'File not found' });
     }
+    console.log('[File Download] File info found:', fileInfo);
 
+    console.log('[File Download] Downloading file buffer from GridFS...');
     // Download file from GridFS
     const fileBuffer = await downloadFromGridFS(fileId);
+    console.log('[File Download] File buffer size:', fileBuffer.length);
 
     // Set appropriate headers
     res.set({
@@ -152,10 +256,11 @@ router.get('/file/:fileId', async (req, res) => {
       'Cache-Control': 'public, max-age=31536000' // Cache for 1 year
     });
 
+    console.log('[File Download] SUCCESS: Sending file to client');
     res.send(fileBuffer);
 
   } catch (error) {
-    console.error('File download error:', error);
+    console.error('[File Download] FATAL ERROR:', error);
     res.status(500).json({ error: error.message || 'Failed to download file' });
   }
 });
@@ -202,7 +307,7 @@ router.get('/cv/:userId', async (req, res) => {
 router.delete('/file/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
-    const userId = req.user?.id || req.body.userId;
+    const userId = req.user?._id || req.body.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'User not authenticated' });

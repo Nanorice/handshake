@@ -276,8 +276,8 @@ const ProfessionalPublicProfileSetup = memo(({ onSave }) => {
     saveInProgressRef.current = true;
     
     try {
-      // Instead of using the normalized API_BASE, construct the full URL to ensure correct port
-      const requestUrl = 'http://localhost:5000/api/professionalprofiles';
+      // Use the environment-aware API_BASE instead of hardcoded localhost
+      const requestUrl = API_BASE;
       console.log('Saving profile to:', requestUrl);
       console.log('Profile data being saved:', JSON.stringify(profile, null, 2));
       

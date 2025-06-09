@@ -26,6 +26,54 @@ const userSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
+  firstName: {
+    type: String,
+    trim: true,
+    required: false
+  },
+  lastName: {
+    type: String,
+    trim: true,
+    required: false
+  },
+  university: {
+    type: String,
+    trim: true,
+    required: false
+  },
+  major: {
+    type: String,
+    trim: true,
+    required: false
+  },
+  graduationYear: {
+    type: Number,
+    required: false
+  },
+  skills: [{
+    type: String,
+    trim: true
+  }],
+  githubUrl: {
+    type: String,
+    trim: true,
+    required: false
+  },
+  portfolioUrl: {
+    type: String,
+    trim: true,
+    required: false
+  },
+  phoneNumber: {
+    type: String,
+    trim: true,
+    required: false
+  },
+  location: {
+    type: String,
+    trim: true,
+    required: false
+  },
   bio: {
     type: String,
     trim: true,
@@ -70,6 +118,28 @@ const userSchema = new mongoose.Schema({
     }
   },
   cv: {
+    fileId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: false
+    },
+    filename: {
+      type: String,
+      required: false
+    },
+    originalName: {
+      type: String,
+      required: false
+    },
+    contentType: {
+      type: String,
+      required: false
+    },
+    uploadDate: {
+      type: Date,
+      required: false
+    }
+  },
+  resume: {
     fileId: {
       type: mongoose.Schema.Types.ObjectId,
       required: false

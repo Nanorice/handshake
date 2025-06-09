@@ -157,14 +157,14 @@ const Navbar = () => {
     }
   };
 
-  // Reset unread counts when navigating to respective pages
+  // Reset unread counts when navigating to respective pages (optimized to prevent unnecessary re-renders)
   useEffect(() => {
-    if (location.pathname === '/messages') {
+    if (location.pathname === '/messages' && unreadMessages > 0) {
       setUnreadMessages(0);
-    } else if (location.pathname === '/dashboard' || location.pathname === '/coffee-chats') {
+    } else if ((location.pathname === '/dashboard' || location.pathname === '/coffee-chats') && unreadInvitations > 0) {
       setUnreadInvitations(0);
     }
-  }, [location.pathname]);
+  }, [location.pathname, unreadMessages, unreadInvitations]);
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);

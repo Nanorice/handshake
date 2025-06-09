@@ -128,6 +128,11 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/files', fileRoutes);
 
+// Add upload route alias to match frontend expectations
+app.use('/api/upload', fileRoutes);
+
+console.log('✅ File routes mounted at /api/files and /api/upload');
+
 // Diagnostic endpoint for invitation testing
 const Invitation = require('./models/Invitation');
 app.get('/api/diagnostic/invitations', async (req, res) => {

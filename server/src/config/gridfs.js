@@ -28,8 +28,8 @@ const upload = multer({
         cb(new Error('Profile photo must be an image file'), false);
       }
     }
-    // Allow PDFs and Word docs for CVs
-    else if (file.fieldname === 'cv') {
+    // Allow PDFs and Word docs for CVs and resumes
+    else if (file.fieldname === 'cv' || file.fieldname === 'resume') {
       const allowedTypes = [
         'application/pdf',
         'application/msword',
@@ -38,7 +38,7 @@ const upload = multer({
       if (allowedTypes.includes(file.mimetype)) {
         cb(null, true);
       } else {
-        cb(new Error('CV must be a PDF or Word document'), false);
+        cb(new Error('CV/Resume must be a PDF or Word document'), false);
       }
     }
     else {

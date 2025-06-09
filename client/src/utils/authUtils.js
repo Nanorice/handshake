@@ -223,4 +223,59 @@ export const debugAuthState = () => {
   }
   
   return authState;
+};
+
+// Get user display name with fallback logic
+export const getUserDisplayName = () => {
+  try {
+    const userData = getUserData();
+    if (!userData) return 'User';
+    
+    // Try to construct name from firstName/lastName
+    if (userData.firstName) {
+      return userData.firstName;
+    }
+    
+    // Try to extract from full name
+    if (userData.name) {
+      return userData.name.split(' ')[0];
+    }
+    
+    // Try to extract from email
+    if (userData.email) {
+      return userData.email.split('@')[0];
+    }
+    
+    return 'User';
+  } catch (error) {
+    console.error('Error getting user display name:', error);
+    return 'User';
+  }
+};
+
+// Update user data in localStorage and throughout the app
+export const updateUserProfile = (profileData) => {
+  try {
+    const currentUserData = getUserData() || {};
+    
+    // Merge the new profile data with existing user data
+    const updatedUserData = {
+      ...currentUserData,
+      ...profileData,
+      // Ensure name fields are properly set
+      firstName: profileData.firstName || profileData.name?.split(' ')[0] || currentUserData.firstName,
+      lastName: profileData.lastName || profileData.name?.split(' ').slice(1).join(' ') || currentUserData.lastName,
+      name: profileData.name || `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim()
+    };
+    
+    // Save to localStorage
+    localStorage.setItem('userData', JSON.stringify(updatedUserData));
+    
+    console.log('[authUtils] User profile updated in localStorage:', updatedUserData);
+    
+    return true;
+  } catch (error) {
+    console.error('[authUtils] Error updating user profile:', error);
+    return false;
+  }
 }; 

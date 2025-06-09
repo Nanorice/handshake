@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
   Box, 
   Typography, 
@@ -24,7 +24,7 @@ import {
 import { Message, Person, Event, BugReport, Email, Notifications, WorkOutline, LocalCafe } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { getAuthToken, getUserData, getUserType } from '../utils/authUtils';
+import { getAuthToken, getUserData, getUserType, debugAuthState, getUserDisplayName } from '../utils/authUtils';
 import { debugApiConnection } from '../services/professionalService';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import InvitationList from '../components/Invitation/InvitationList';
@@ -37,12 +37,10 @@ console.log('Dashboard API_URL initialized as:', API_URL);
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [userData, setUserData] = useState({
-    firstName: '',
-    lastName: '',
-    userType: ''
-  });
+  const [userData, setUserData] = useState({ firstName: 'User', lastName: '', userType: 'professional' });
+  const [userDisplayName, setUserDisplayName] = useState('User');
   const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
   const [activityData, setActivityData] = useState({
     pendingRequests: 0,
@@ -51,42 +49,97 @@ const Dashboard = () => {
     profileViews: 0
   });
   const [invitationStats, setInvitationStats] = useState({
-    pendingReceived: 0,
-    pendingSent: 0,
+    pending: 0,
     accepted: 0,
-    declined: 0,
-    total: 0
+    sent: 0
   });
-  const [dataLoading, setDataLoading] = useState(true);
-  const [tokenStatus, setTokenStatus] = useState({
-    exists: false,
-    value: null
-  });
-  const [debugResult, setDebugResult] = useState(null);
+  const [tokenStatus, setTokenStatus] = useState({ exists: false, value: null });
   const [invitationTab, setInvitationTab] = useState(0);
+  
+  // Debug state
+  const [debugResult, setDebugResult] = useState(null);
   const theme = useTheme();
   const isProfessional = getUserType() === 'professional';
 
-  // Debug function to test API connection
   const testApiConnection = async () => {
-    setDebugResult({ loading: true });
     try {
-      const result = await debugApiConnection();
-      setDebugResult({
-        success: result.success,
-        data: result.data,
-        error: result.error,
-        loading: false
+      const baseUrl = getApiBaseUrl();
+      console.log('Testing API connection to:', baseUrl);
+      
+      const response = await axios.get(`${baseUrl}/test`, {
+        timeout: 5000
       });
+      
+      console.log('API Test Response:', response.data);
+      setDebugResult({ success: true, data: response.data });
     } catch (error) {
-      setDebugResult({
-        success: false,
-        error: error.message,
-        loading: false
-      });
+      console.error('API Test Error:', error);
+      setDebugResult({ success: false, error: error.message });
     }
   };
 
+  const refreshUserDisplayName = useCallback(() => {
+    try {
+      // Get fresh user data from localStorage
+      const userData = getUserData();
+      let displayName = 'User';
+      
+      if (userData) {
+        console.log('[Dashboard] Fresh userData from localStorage:', userData);
+        
+        // Try multiple sources for the name
+        if (userData.firstName) {
+          displayName = userData.firstName;
+        } else if (userData.name) {
+          displayName = userData.name.split(' ')[0];
+        } else if (userData.email) {
+          displayName = userData.email.split('@')[0];
+        } else {
+          // Check if it's just showing userType instead of name
+          if (userData.userType && userData.userType !== 'professional' && userData.userType !== 'seeker') {
+            displayName = userData.userType;
+          }
+        }
+        
+        console.log('[Dashboard] Extracted display name:', displayName);
+      }
+      
+      setUserDisplayName(displayName);
+      return displayName;
+    } catch (error) {
+      console.error('[Dashboard] Error refreshing display name:', error);
+      setUserDisplayName('User');
+      return 'User';
+    }
+  }, []);
+
+  // Enhanced localStorage listener to detect changes
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'userData' || e.key === null) {
+        console.log('[Dashboard] localStorage userData changed, refreshing display name');
+        refreshUserDisplayName();
+      }
+    };
+
+    // Listen for storage changes from other tabs/windows
+    window.addEventListener('storage', handleStorageChange);
+
+    // Listen for custom storage events (same tab updates)
+    const handleCustomStorageUpdate = () => {
+      console.log('[Dashboard] Custom storage update detected');
+      refreshUserDisplayName();
+    };
+
+    window.addEventListener('userDataUpdated', handleCustomStorageUpdate);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('userDataUpdated', handleCustomStorageUpdate);
+    };
+  }, [refreshUserDisplayName]);
+
+  // Enhanced useEffect with user data refresh and window focus listener
   useEffect(() => {
     console.log('Dashboard component loaded');
     
@@ -126,17 +179,26 @@ const Dashboard = () => {
         const parsedUserData = JSON.parse(userDataJson);
         console.log('Dashboard parsed userData:', parsedUserData ? 'Successfully parsed' : 'Parse failed');
         
+        // Extract proper name from different possible fields
+        const firstName = parsedUserData.firstName || 
+                         parsedUserData.name?.split(' ')[0] || 
+                         parsedUserData.email?.split('@')[0] || 
+                         'User';
+        const lastName = parsedUserData.lastName || 
+                        (parsedUserData.name?.split(' ').slice(1).join(' ')) || 
+                        '';
+        
         setUserData({
-          firstName: parsedUserData.firstName || 'User',
-          lastName: parsedUserData.lastName || 'Name',
-          userType: parsedUserData.userType || 'professional'
+          firstName: firstName,
+          lastName: lastName,
+          userType: parsedUserData.userType || parsedUserData.role || 'professional'
         });
       } else {
-        // Fallback mock data if no user data found
-        console.log('No user data found, using fallback data');
+        // Try to get from auth context or API if localStorage is empty
+        console.log('No localStorage data found');
         setUserData({
           firstName: 'User',
-          lastName: 'Name',
+          lastName: '',
           userType: 'professional'
         });
       }
@@ -145,16 +207,33 @@ const Dashboard = () => {
       // Fallback to default values
       setUserData({
         firstName: 'User',
-        lastName: 'Name',
+        lastName: '',
         userType: 'professional'
       });
     }
+    
+    // Refresh display name
+    refreshUserDisplayName();
     
     setLoading(false);
     
     // Fetch upcoming meetings and activity data
     fetchDashboardData();
-  }, [navigate]);
+
+    // Add window focus listener to refresh data when user returns
+    const handleWindowFocus = () => {
+      console.log('[Dashboard] Window focused, refreshing user data');
+      refreshUserDisplayName();
+      fetchDashboardData();
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [navigate, refreshUserDisplayName]);
   
   const fetchDashboardData = async () => {
     setDataLoading(true);
@@ -292,7 +371,7 @@ const Dashboard = () => {
               margin: 0, 
               color: theme.text 
             }}>
-              Welcome back, {userData.firstName}!
+              Welcome back, {userDisplayName}!
             </h1>
             {isProfessional && (
               <span style={{
@@ -503,12 +582,12 @@ const Dashboard = () => {
                   <Card sx={{ height: '100%' }}>
                     <CardContent>
                       <Typography variant="h5" component="div">
-                        {activityData.pendingRequests || invitationStats.pendingReceived || 0}
+                        {activityData.pendingRequests || invitationStats.pending || 0}
                       </Typography>
                       <Typography color="text.secondary">
                         Pending Invitations
                       </Typography>
-                      {invitationStats.pendingReceived > 0 && (
+                      {invitationStats.pending > 0 && (
                         <Button 
                           size="small" 
                           color="primary" 
@@ -540,12 +619,12 @@ const Dashboard = () => {
                   <Card sx={{ height: '100%' }}>
                     <CardContent>
                       <Typography variant="h5" component="div">
-                        {invitationStats.pendingSent || 0}
+                        {invitationStats.sent || 0}
                       </Typography>
                       <Typography color="text.secondary">
                         Outgoing Requests
                       </Typography>
-                      {invitationStats.pendingSent > 0 && (
+                      {invitationStats.sent > 0 && (
                         <Button 
                           size="small" 
                           color="primary" 
@@ -565,7 +644,7 @@ const Dashboard = () => {
                   <Card sx={{ height: '100%' }}>
                     <CardContent>
                       <Typography variant="h5" component="div">
-                        {invitationStats.total || 0}
+                        {invitationStats.accepted || 0}
                       </Typography>
                       <Typography color="text.secondary">
                         Total Interactions

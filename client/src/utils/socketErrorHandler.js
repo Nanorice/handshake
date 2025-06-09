@@ -152,9 +152,21 @@ function restoreScrollPositions() {
     let attempts = 0;
     
     const attemptRestore = () => {
-      // Restore window position first
-      if (lastScrollPositions.window) {
+      // Only restore window scroll position on specific messaging/chat pages where it's actually needed
+      const currentPath = window.location.pathname;
+      const allowWindowScrollRestoration = [
+        '/messages',
+        '/chat',
+        '/conversation',
+        '/thread'
+      ].some(path => currentPath.includes(path));
+      
+      // Only restore window position for messaging pages
+      if (lastScrollPositions.window && allowWindowScrollRestoration) {
+        console.log('Restoring window scroll position for messaging page:', lastScrollPositions.window);
         window.scrollTo(lastScrollPositions.window.x, lastScrollPositions.window.y);
+      } else if (lastScrollPositions.window) {
+        console.log('Skipping window scroll restoration on non-messaging page:', currentPath);
       }
       
       // Find all potential message containers using more specific selectors
@@ -206,10 +218,10 @@ function restoreScrollPositions() {
         }
       });
       
-      // If no positions were restored and we haven't hit max attempts, try again shortly
-      if (!restoredAny && attempts < maxAttempts) {
+      // Only retry for messaging pages where window scroll restoration is needed
+      if (!restoredAny && attempts < maxAttempts && allowWindowScrollRestoration) {
         attempts++;
-        setTimeout(attemptRestore, 200 * attempts); // Increasing delays for later attempts
+        setTimeout(attemptRestore, 500 * attempts); // Longer delays to reduce interference
       }
     };
     
