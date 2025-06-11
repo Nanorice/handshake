@@ -21,7 +21,7 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     // Allow images for profile photos
-    if (file.fieldname === 'profilePhoto') {
+    if (file.fieldname === 'profilePicture') {
       if (file.mimetype.startsWith('image/')) {
         cb(null, true);
       } else {

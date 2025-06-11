@@ -279,6 +279,22 @@ const EnhancedMessageThread = ({
       return [];
     }
     
+    // Debug profile photo data
+    if (messagesArray.length > 0) {
+      const sampleMessage = messagesArray[0];
+      console.log('[EnhancedMessageThread] 📸 Sample message data:', {
+        messageId: sampleMessage._id,
+        senderName: sampleMessage.sender?.firstName,
+        hasProfilePhoto: !!sampleMessage.sender?.profilePhoto,
+        profilePhotoFileId: sampleMessage.sender?.profilePhoto?.fileId,
+        hasOldProfilePicture: !!sampleMessage.sender?.profile?.profilePicture,
+        constructedAvatarURL: sampleMessage.sender?.profilePhoto?.fileId ? 
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${sampleMessage.sender.profilePhoto.fileId}` :
+          'No URL - missing fileId',
+        fullSenderObject: sampleMessage.sender
+      });
+    }
+    
     try {
       return messagesArray.map(message => {
         // Skip invalid messages
@@ -303,7 +319,11 @@ const EnhancedMessageThread = ({
           focus: false,
           status: message.isLocal ? 'waiting' : 'sent',
           notch: true,
-          avatar: !isCurrentUser ? message.sender?.profile?.profilePicture : null
+          avatar: !isCurrentUser ? (
+            message.sender?.profilePhoto?.fileId ? 
+              `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${message.sender.profilePhoto.fileId}` :
+              message.sender?.profile?.profilePicture || null
+          ) : null
         };
         
         // If there's an image attachment, show it as an image message
@@ -385,7 +405,10 @@ const EnhancedMessageThread = ({
             </IconButton>
           )}
           <Avatar 
-            src={otherUser?.profile?.profilePicture} 
+            src={otherUser?.profilePhoto?.fileId ? 
+              `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${otherUser.profilePhoto.fileId}` :
+              otherUser?.profile?.profilePicture || null
+            }
             alt={otherUser?.firstName || ''}
             sx={{ mr: 1 }}
           >

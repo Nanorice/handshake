@@ -53,6 +53,10 @@ const MessageItem = ({ message, isOwnMessage }) => {
     >
       {!isOwnMessage && (
         <Avatar
+          src={message.sender?.profilePhoto?.fileId ? 
+            `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${message.sender.profilePhoto.fileId}` : 
+            null
+          }
           sx={{ 
             width: 28, 
             height: 28, 
@@ -132,6 +136,18 @@ const MessageView = ({ threadId, onBack, currentUserId, otherParticipant }) => {
         threadId: sampleMessage.threadId || sampleMessage.thread,
         content: sampleMessage.content?.substring(0, 30)
       });
+      
+      // Log profile photo data specifically
+      console.log('[MessageView] 📸 Message sender profile photo data:', {
+        hasProfilePhoto: !!sampleMessage.sender?.profilePhoto,
+        profilePhotoFileId: sampleMessage.sender?.profilePhoto?.fileId,
+        hasOldProfilePicture: !!sampleMessage.sender?.profile?.profilePicture,
+        oldProfilePicture: sampleMessage.sender?.profile?.profilePicture,
+        constructedURL: sampleMessage.sender?.profilePhoto?.fileId ? 
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${sampleMessage.sender.profilePhoto.fileId}` : 
+          'No URL - missing fileId',
+        senderFullObject: sampleMessage.sender
+      });
     }
   }, [currentUserId, messages]);
 
@@ -156,7 +172,10 @@ const MessageView = ({ threadId, onBack, currentUserId, otherParticipant }) => {
     return (
       <Avatar 
         sx={{ bgcolor: theme.palette.secondary.main }}
-        src={otherParticipant?.profile?.profilePicture || null}
+        src={otherParticipant?.profilePhoto?.fileId ? 
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${otherParticipant.profilePhoto.fileId}` : 
+          otherParticipant?.profile?.profilePicture || null
+        }
       >
         {getInitials(name)}
       </Avatar>

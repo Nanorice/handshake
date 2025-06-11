@@ -23,35 +23,45 @@ router.get('/test-auth', auth, (req, res) => {
 });
 
 // Upload profile photo
-router.post('/upload/profile-photo', auth, upload.single('profilePhoto'), async (req, res) => {
+router.post('/upload/profile-photo', auth, upload.single('profilePicture'), async (req, res) => {
   try {
+    console.log('[Profile Photo Upload] Starting upload process');
+    console.log('[Profile Photo Upload] User from auth:', req.user ? `${req.user.email} (${req.user._id})` : 'No user');
+    console.log('[Profile Photo Upload] File received:', req.file ? req.file.originalname : 'No file');
+    
     if (!req.file) {
+      console.log('[Profile Photo Upload] ERROR: No file in request');
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
     const userId = req.user?._id || req.body.userId;
     if (!userId) {
+      console.log('[Profile Photo Upload] ERROR: No user ID found');
       return res.status(401).json({ error: 'User not authenticated' });
     }
 
+    console.log('[Profile Photo Upload] Uploading to GridFS...');
     // Upload file to GridFS
     const fileData = await uploadToGridFS(req.file, {
       userId: userId,
       fileType: 'profilePhoto'
     });
+    console.log('[Profile Photo Upload] GridFS upload successful:', fileData);
 
     // Update user with new profile photo reference
     const user = await User.findById(userId);
     if (!user) {
+      console.log('[Profile Photo Upload] ERROR: User not found in database');
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Delete old profile photo if it exists
     if (user.profilePhoto && user.profilePhoto.fileId) {
       try {
+        console.log('[Profile Photo Upload] Deleting old profile photo:', user.profilePhoto.fileId);
         await deleteFromGridFS(user.profilePhoto.fileId);
       } catch (error) {
-        console.warn('Failed to delete old profile photo:', error.message);
+        console.warn('[Profile Photo Upload] Failed to delete old profile photo:', error.message);
       }
     }
 
@@ -64,9 +74,11 @@ router.post('/upload/profile-photo', auth, upload.single('profilePhoto'), async 
       uploadDate: new Date()
     };
 
+    console.log('[Profile Photo Upload] Saving user with new profile photo data...');
     await user.save();
+    console.log('[Profile Photo Upload] User saved successfully');
 
-    res.json({
+    const responseData = {
       success: true,
       message: 'Profile photo uploaded successfully',
       data: {
@@ -76,10 +88,14 @@ router.post('/upload/profile-photo', auth, upload.single('profilePhoto'), async 
         originalName: fileData.originalName,
         contentType: fileData.contentType
       }
-    });
+    };
+    
+    console.log('[Profile Photo Upload] SUCCESS - Sending response:', responseData);
+    res.json(responseData);
 
   } catch (error) {
-    console.error('Profile photo upload error:', error);
+    console.error('[Profile Photo Upload] FATAL ERROR:', error);
+    console.error('[Profile Photo Upload] Error stack:', error.stack);
     res.status(500).json({ error: error.message || 'Failed to upload profile photo' });
   }
 });

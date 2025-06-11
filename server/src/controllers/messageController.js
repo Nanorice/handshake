@@ -15,8 +15,8 @@ const getThreads = async (req, res) => {
       participants: userId,
       status: 'active'
     })
-    // Populate with correct User model fields: name, email, profileImage, role (for userType virtual)
-    .populate('participants', 'name email profileImage role') 
+    // UPDATED: Include profilePhoto field for GridFS support
+    .populate('participants', 'name email profileImage profilePhoto role firstName lastName') 
     .sort({ updatedAt: -1 });
 
     const formattedThreads = threads.map(thread => {
@@ -29,8 +29,8 @@ const getThreads = async (req, res) => {
         // Attempt to split name into firstName and lastName
         // This is a common heuristic; adjust if names can be more complex
         const nameParts = otherParticipantDoc.name ? otherParticipantDoc.name.split(' ') : [];
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+        const firstName = otherParticipantDoc.firstName || nameParts[0] || '';
+        const lastName = otherParticipantDoc.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
 
         otherParticipantData = {
           _id: otherParticipantDoc._id,
@@ -39,6 +39,9 @@ const getThreads = async (req, res) => {
           name: otherParticipantDoc.name, // Full name from User model
           firstName: firstName,          // Derived first name
           lastName: lastName,            // Derived last name
+          // UPDATED: Include both legacy and new profile photo fields
+          profilePhoto: otherParticipantDoc.profilePhoto || null, // GridFS profile photo
+          profileImage: otherParticipantDoc.profileImage || null, // Legacy profile image
           profile: {
             // Create the nested profile.profilePicture structure expected by frontend
             profilePicture: otherParticipantDoc.profileImage || null 
@@ -97,8 +100,9 @@ const getMessages = async (req, res) => {
     }
     
     // Get messages sorted by timestamp
+    // UPDATED: Include profilePhoto field for GridFS support
     const messagesFromDb = await Message.find({ threadId })
-      .populate('sender', 'name email profileImage role')
+      .populate('sender', 'name email profileImage profilePhoto role firstName lastName')
       .sort({ createdAt: 1 });
     
     // Mark messages as read
@@ -122,15 +126,21 @@ const getMessages = async (req, res) => {
       if (msg.sender && typeof msg.sender === 'object') {
         const senderDoc = msg.sender;
         const nameParts = senderDoc.name ? senderDoc.name.split(' ') : [];
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+        const firstName = senderDoc.firstName || nameParts[0] || '';
+        const lastName = senderDoc.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
+        
         senderData = {
           _id: senderDoc._id,
           name: senderDoc.name,
           firstName,
           lastName,
           email: senderDoc.email,
-          profileImage: senderDoc.profileImage || null,
+          // UPDATED: Include both legacy and new profile photo fields
+          profilePhoto: senderDoc.profilePhoto || null, // GridFS profile photo
+          profileImage: senderDoc.profileImage || null, // Legacy profile image
+          profile: {
+            profilePicture: senderDoc.profileImage || null // Legacy nested structure
+          },
           userType: senderDoc.role === 'professional' ? 'professional' : 'seeker'
         };
       }
@@ -252,22 +262,28 @@ const sendMessage = async (req, res) => {
     
     // Populate sender info before returning and emitting
     let populatedMessage = await Message.findById(message._id)
-      .populate('sender', 'name email profileImage role')
+      .populate('sender', 'name email profileImage profilePhoto role firstName lastName')
       .populate('replyTo')
       .lean(); // Use .lean() for a plain JS object
 
     if (populatedMessage.sender && typeof populatedMessage.sender === 'object') {
       const senderDoc = populatedMessage.sender;
       const nameParts = senderDoc.name ? senderDoc.name.split(' ') : [];
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+      const firstName = senderDoc.firstName || nameParts[0] || '';
+      const lastName = senderDoc.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
+      
       populatedMessage.sender = {
         _id: senderDoc._id,
         name: senderDoc.name,
         firstName,
         lastName,
         email: senderDoc.email,
-        profileImage: senderDoc.profileImage || null,
+        // UPDATED: Include both legacy and new profile photo fields
+        profilePhoto: senderDoc.profilePhoto || null, // GridFS profile photo
+        profileImage: senderDoc.profileImage || null, // Legacy profile image
+        profile: {
+          profilePicture: senderDoc.profileImage || null // Legacy nested structure
+        },
         userType: senderDoc.role === 'professional' ? 'professional' : 'seeker'
       };
     }
@@ -467,8 +483,9 @@ const createThread = async (req, res) => {
     session.endSession();
     
     // Populate thread before returning
+    // UPDATED: Include profilePhoto field for GridFS support
     let populatedThread = await Thread.findById(thread._id)
-        .populate('participants', 'name email profileImage role')
+        .populate('participants', 'name email profileImage profilePhoto role firstName lastName')
         .lean();
 
     // Format participants in the same way as getThreads
@@ -476,8 +493,8 @@ const createThread = async (req, res) => {
         populatedThread.participants = populatedThread.participants.map(p => {
             if (!p || typeof p !== 'object') return p; // Should not happen if populated
             const nameParts = p.name ? p.name.split(' ') : [];
-            const firstName = nameParts[0] || '';
-            const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+            const firstName = p.firstName || nameParts[0] || '';
+            const lastName = p.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
             return {
                 _id: p._id,
                 id: p._id,
@@ -485,6 +502,9 @@ const createThread = async (req, res) => {
                 name: p.name,
                 firstName,
                 lastName,
+                // UPDATED: Include both legacy and new profile photo fields
+                profilePhoto: p.profilePhoto || null, // GridFS profile photo
+                profileImage: p.profileImage || null, // Legacy profile image
                 profile: {
                     profilePicture: p.profileImage || null
                 },
@@ -633,7 +653,7 @@ const getMessagesForThread = async (req, res) => {
     const messagesFromDb = await Message.find({ threadId: threadId })
       .sort({ createdAt: 1 }) // Sort by oldest first
       // Populate sender with fields consistent with getThreads
-      .populate('sender', 'name email profileImage role'); 
+      .populate('sender', 'name email profileImage profilePhoto role firstName lastName'); 
 
     // 3. Mark messages as read and update thread unread count for the current user
     // Check if the user actually has unread messages in this thread
@@ -658,15 +678,20 @@ const getMessagesForThread = async (req, res) => {
       if (msg.sender && typeof msg.sender === 'object') {
         const senderDoc = msg.sender;
         const nameParts = senderDoc.name ? senderDoc.name.split(' ') : [];
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+        const firstName = senderDoc.firstName || nameParts[0] || '';
+        const lastName = senderDoc.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
         senderData = {
           _id: senderDoc._id,
           name: senderDoc.name,
           firstName,
           lastName,
           email: senderDoc.email,
-          profileImage: senderDoc.profileImage || null,
+          // UPDATED: Include both legacy and new profile photo fields
+          profilePhoto: senderDoc.profilePhoto || null, // GridFS profile photo
+          profileImage: senderDoc.profileImage || null, // Legacy profile image
+          profile: {
+            profilePicture: senderDoc.profileImage || null // Legacy nested structure
+          },
           userType: senderDoc.role === 'professional' ? 'professional' : 'seeker'
         };
       }

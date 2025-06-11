@@ -261,11 +261,28 @@ const ChatBubble = () => {
                         style={{ borderColor: currentTheme.border }}
                       >
                         {/* Avatar */}
-                        <div 
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold mr-3"
-                          style={{ backgroundColor: currentTheme.primary }}
-                        >
-                          {otherParticipant?.firstName?.[0] || 'U'}
+                        <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center mr-3 bg-gray-200">
+                          {otherParticipant?.profilePhoto?.fileId ? (
+                            <img 
+                              src={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${otherParticipant.profilePhoto.fileId}`}
+                              alt={`${otherParticipant?.firstName || 'User'} profile`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                // Fallback to initials if image fails to load
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div 
+                            className="w-full h-full rounded-full flex items-center justify-center text-white font-semibold"
+                            style={{ 
+                              backgroundColor: currentTheme.primary,
+                              display: otherParticipant?.profilePhoto?.fileId ? 'none' : 'flex'
+                            }}
+                          >
+                            {otherParticipant?.firstName?.[0] || 'U'}
+                          </div>
                         </div>
                         
                         {/* Content */}

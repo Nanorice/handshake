@@ -56,15 +56,28 @@ router.put('/profile', auth, async (req, res) => {
     const userId = req.user._id;
     const User = require('../models/User');
     
+    console.log('[AUTH PROFILE UPDATE] Request received');
+    console.log('[AUTH PROFILE UPDATE] User ID:', userId);
+    console.log('[AUTH PROFILE UPDATE] Request body:', JSON.stringify(req.body, null, 2));
+    
     // Get the current user
     const user = await User.findById(userId);
     if (!user) {
+      console.log('[AUTH PROFILE UPDATE] User not found:', userId);
       return res.status(404).json({ error: 'User not found' });
     }
 
+    console.log('[AUTH PROFILE UPDATE] Current user data:', {
+      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      preferredName: user.preferredName,
+      email: user.email
+    });
+
     // Update allowed fields
     const allowedFields = [
-      'name', 'firstName', 'lastName', 'email', 'university', 'major',
+      'name', 'firstName', 'lastName', 'preferredName', 'email', 'university', 'major',
       'graduationYear', 'bio', 'skills', 'linkedinUrl', 'githubUrl',
       'portfolioUrl', 'phoneNumber', 'location', 'resumeUrl'
     ];
@@ -73,8 +86,11 @@ router.put('/profile', auth, async (req, res) => {
     allowedFields.forEach(field => {
       if (req.body.hasOwnProperty(field)) {
         updateData[field] = req.body[field];
+        console.log(`[AUTH PROFILE UPDATE] Will update ${field}:`, req.body[field]);
       }
     });
+
+    console.log('[AUTH PROFILE UPDATE] Final update data:', JSON.stringify(updateData, null, 2));
 
     // Update the user
     const updatedUser = await User.findByIdAndUpdate(
@@ -83,6 +99,14 @@ router.put('/profile', auth, async (req, res) => {
       { new: true, runValidators: true }
     ).select('-password');
 
+    console.log('[AUTH PROFILE UPDATE] Updated user data:', {
+      name: updatedUser.name,
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      preferredName: updatedUser.preferredName,
+      email: updatedUser.email
+    });
+
     res.json({
       success: true,
       message: 'Profile updated successfully',
@@ -90,7 +114,7 @@ router.put('/profile', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Profile update error:', error);
+    console.error('[AUTH PROFILE UPDATE] Error:', error);
     res.status(500).json({ error: error.message || 'Failed to update profile' });
   }
 });

@@ -36,6 +36,11 @@ const userSchema = new mongoose.Schema({
     trim: true,
     required: false
   },
+  preferredName: {
+    type: String,
+    trim: true,
+    required: false
+  },
   university: {
     type: String,
     trim: true,

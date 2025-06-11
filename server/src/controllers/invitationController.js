@@ -103,8 +103,8 @@ const sendInvitation = async (req, res) => {
     
     // Get populated data for response
     const populatedInvitation = await Invitation.findById(invitation._id)
-      .populate('sender', 'firstName lastName email')
-      .populate('receiver', 'firstName lastName email');
+      .populate('sender', 'firstName lastName email profileImage profilePhoto')
+      .populate('receiver', 'firstName lastName email profileImage profilePhoto');
     
     res.status(201).json({
       success: true,
@@ -513,8 +513,8 @@ const respondToInvitation = async (req, res) => {
     console.log('STEP 10: Getting populated data');
     // Get populated data for response
     const populatedInvitation = await Invitation.findById(invitation._id)
-      .populate('sender', 'firstName lastName email profileImage')
-      .populate('receiver', 'firstName lastName email profileImage');
+      .populate('sender', 'firstName lastName email profileImage profilePhoto')
+      .populate('receiver', 'firstName lastName email profileImage profilePhoto');
     
     console.log('STEP 11: Emitting socket event');
     // Emit socket event to the sender (seeker)

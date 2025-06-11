@@ -171,7 +171,7 @@ class SocketService {
 
         // DEBUGGING: Log any socket events we're not handling
         this._socket.onAny((eventName, ...args) => {
-          if (!['connect', 'disconnect', 'new-message', 'message-notification', 'thread-joined', 'ping', 'pong', 'user-typing', 'user-typing-stopped', 'user-joined-thread'].includes(eventName)) {
+          if (!['connect', 'disconnect', 'new-message', 'message-notification', 'thread-joined', 'ping', 'pong', 'user-typing', 'user-typing-stopped', 'user-joined-thread', 'message-sent', 'message-error', 'message-removed'].includes(eventName)) {
             console.log(`[socketService] Unhandled socket event '${eventName}':`, args);
           }
         });
@@ -219,6 +219,28 @@ class SocketService {
           console.log('[socketService] thread-read received:', data);
           if (this.eventHandlers.has('thread-read')) {
             this.eventHandlers.get('thread-read').forEach(handler => handler(data));
+          }
+        });
+
+        // Handle message confirmation events
+        this._socket.on('message-sent', (data) => {
+          console.log('[socketService] message-sent received:', data);
+          // Message was successfully sent - could update UI status
+        });
+
+        this._socket.on('message-error', (data) => {
+          console.log('[socketService] message-error received:', data);
+          // Message failed to send - could show error or retry
+          if (this.eventHandlers.has('message-error')) {
+            this.eventHandlers.get('message-error').forEach(handler => handler(data));
+          }
+        });
+
+        this._socket.on('message-removed', (data) => {
+          console.log('[socketService] message-removed received:', data);
+          // Temp message should be removed from UI
+          if (this.eventHandlers.has('message-removed')) {
+            this.eventHandlers.get('message-removed').forEach(handler => handler(data));
           }
         });
 

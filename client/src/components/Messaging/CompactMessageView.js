@@ -206,7 +206,10 @@ const CompactMessageView = ({
           <ArrowBack fontSize="small" />
         </IconButton>
         <Avatar
-          src={otherParticipant?.profileImage}
+          src={otherParticipant?.profilePhoto?.fileId ? 
+            `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${otherParticipant.profilePhoto.fileId}` : 
+            otherParticipant?.profileImage || null
+          }
           sx={{ width: 28, height: 28 }}
         >
           {participantName.charAt(0).toUpperCase()}
@@ -267,7 +270,10 @@ const CompactMessageView = ({
                   <Box sx={{ width: '24px', display: 'flex', justifyContent: 'center' }}>
                     {!isOwn && showAvatar && (
                       <Avatar
-                        src={otherParticipant?.profileImage}
+                        src={otherParticipant?.profilePhoto?.fileId ? 
+                          `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${otherParticipant.profilePhoto.fileId}` : 
+                          otherParticipant?.profileImage || null
+                        }
                         sx={{ width: 20, height: 20 }}
                       >
                         {participantName.charAt(0).toUpperCase()}

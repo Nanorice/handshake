@@ -125,7 +125,7 @@ const ProfessionalProfileForm = ({ initialData, onSave }) => {
         <Grid item xs={12} md={4}>
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <ProfilePhotoUploader 
-              initialImage={profile.profilePicture || "/placeholder-avatar.jpg"} 
+              initialImage={profile.profilePicture || null} 
               onSave={(blob, dataUrl) => {
                 setProfile({
                   ...profile,
@@ -140,13 +140,35 @@ const ProfessionalProfileForm = ({ initialData, onSave }) => {
 
         {/* Basic Information */}
         <Grid item xs={12} md={8}>
+          <Typography variant="body2" color="primary" sx={{ mb: 2, fontWeight: 500 }}>
+            💡 Update your First Name, Last Name, or Preferred Name below to change how you're greeted on the dashboard
+          </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Full Name"
-                value={profile.name}
-                onChange={handleChange('name')}
+                label="Preferred Name (Optional)"
+                value={profile.preferredName || ''}
+                onChange={handleChange('preferredName')}
+                helperText="How you'd like to be addressed"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="First Name"
+                value={profile.firstName || ''}
+                onChange={handleChange('firstName')}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Last Name"
+                value={profile.lastName || ''}
+                onChange={handleChange('lastName')}
+                required
               />
             </Grid>
             <Grid item xs={12} sm={6}>

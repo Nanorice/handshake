@@ -148,8 +148,8 @@ const respondToInvitation = async (req, res) => {
     
     // Get populated data for response
     const populatedInvitation = await Invitation.findById(invitation._id)
-      .populate('sender', 'firstName lastName email profileImage')
-      .populate('receiver', 'firstName lastName email profileImage');
+      .populate('sender', 'firstName lastName email profileImage profilePhoto')
+      .populate('receiver', 'firstName lastName email profileImage profilePhoto');
     
     // Try to emit socket event if socket.io is available
     try {
@@ -204,8 +204,8 @@ const getInvitation = async (req, res) => {
     const userId = req.user._id;
     
     const invitation = await Invitation.findById(id)
-      .populate('sender', 'firstName lastName email profileImage')
-      .populate('receiver', 'firstName lastName email profileImage');
+      .populate('sender', 'firstName lastName email profileImage profilePhoto')
+      .populate('receiver', 'firstName lastName email profileImage profilePhoto');
     
     if (!invitation) {
       return res.status(404).json({

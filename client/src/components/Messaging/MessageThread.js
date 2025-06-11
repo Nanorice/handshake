@@ -149,16 +149,21 @@ const Message = ({ message, isCurrentUser, darkMode, allMessages, onReply }) => 
   const safeContent = typeof messageContent === 'string' ? messageContent.trim() : String(messageContent || '').trim();
   const hasContent = safeContent !== '';
   
-  // Debug: Log content details to identify spacing issues
-  if (isCurrentUser && safeContent) {
-    console.log('Message content debug:', {
-      raw: JSON.stringify(messageContent),
-      safe: JSON.stringify(safeContent),
-      length: safeContent.length,
-      ends: `"${safeContent.slice(-5)}"`,
-      chars: safeContent.split('').map(c => c.charCodeAt(0))
-    });
-  }
+  // Debug profile photo data only once per component load (not on every render)
+  useEffect(() => {
+    if (message.sender && !isCurrentUser) {
+      console.log('[MessageThread] 📸 Profile photo debug for message:', {
+        messageId: message._id,
+        senderName: message.sender?.firstName,
+        hasProfilePhoto: !!message.sender?.profilePhoto,
+        profilePhotoFileId: message.sender?.profilePhoto?.fileId,
+        hasOldProfilePicture: !!message.sender?.profile?.profilePicture,
+        constructedUrl: message.sender?.profilePhoto?.fileId ? 
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${message.sender.profilePhoto.fileId}` : 
+          'No URL constructed'
+      });
+    }
+  }, [message._id, message.sender, isCurrentUser]);
   
   const isReply = message.messageType === 'reply' && message.replyTo;
   
@@ -177,7 +182,10 @@ const Message = ({ message, isCurrentUser, darkMode, allMessages, onReply }) => 
     >
       {!isCurrentUser && (
         <Avatar 
-          src={message.sender?.profile?.profilePicture} 
+          src={message.sender?.profilePhoto?.fileId ? 
+            `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${message.sender.profilePhoto.fileId}` : 
+            message.sender?.profile?.profilePicture || null
+          }
           alt={message.sender?.firstName || "User"}
           sx={{ width: 32, height: 32, mr: 1, mt: 1 }}
         />
@@ -296,7 +304,10 @@ const Message = ({ message, isCurrentUser, darkMode, allMessages, onReply }) => 
       
       {isCurrentUser && (
         <Avatar 
-          src={message.sender?.profile?.profilePicture} 
+          src={message.sender?.profilePhoto?.fileId ? 
+            `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/file/${message.sender.profilePhoto.fileId}` : 
+            message.sender?.profile?.profilePicture || null
+          }
           alt={message.sender?.firstName || "User"}
           sx={{ width: 32, height: 32, ml: 1, mt: 1 }}
         />

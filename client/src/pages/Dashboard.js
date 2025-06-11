@@ -78,40 +78,105 @@ const Dashboard = () => {
     }
   };
 
-  const refreshUserDisplayName = useCallback(() => {
+  // Function to fetch fresh user data from API
+  const fetchFreshUserData = useCallback(async () => {
     try {
-      // Get fresh user data from localStorage
-      const userData = getUserData();
-      let displayName = 'User';
+      const token = getAuthToken();
+      if (!token) {
+        console.log('[Dashboard] No token available for API call');
+        return null;
+      }
+
+      const baseUrl = getApiBaseUrl();
+      const profileUrl = `${baseUrl}/auth/profile`;
+      console.log('[Dashboard] 🔄 Fetching fresh user data from API:', profileUrl);
+
+      const response = await axios.get(profileUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.data && response.data.success) {
+        const freshUserData = response.data.data;
+        console.log('[Dashboard] ✅ Fresh user data fetched:', {
+          name: freshUserData.name,
+          firstName: freshUserData.firstName,
+          lastName: freshUserData.lastName,
+          email: freshUserData.email
+        });
+
+        // Update localStorage with fresh data
+        localStorage.setItem('userData', JSON.stringify(freshUserData));
+        console.log('[Dashboard] 💾 Updated localStorage with fresh API data');
+
+        return freshUserData;
+      } else {
+        console.log('[Dashboard] ❌ API returned unsuccessful response:', response.data);
+        return null;
+      }
+    } catch (error) {
+      console.error('[Dashboard] ❌ Error fetching fresh user data:', error);
+      return null;
+    }
+  }, []);
+
+  const refreshUserDisplayName = useCallback(async () => {
+    try {
+      console.log('[Dashboard] 🔄 Refreshing user display name...');
+      
+      // First try to get fresh data from API
+      const freshUserData = await fetchFreshUserData();
+      let userData = freshUserData;
+      
+      // If API fails, fall back to localStorage
+      if (!userData) {
+        console.log('[Dashboard] 📱 API failed, falling back to localStorage');
+        userData = getUserData();
+      }
+      
+      let displayName = 'User'; // Default fallback
       
       if (userData) {
-        console.log('[Dashboard] Fresh userData from localStorage:', userData);
+        console.log('[Dashboard] 📋 Processing user data for display name:', {
+          preferredName: userData.preferredName,
+          firstName: userData.firstName,
+          name: userData.name,
+          email: userData.email
+        });
         
-        // Try multiple sources for the name
-        if (userData.firstName) {
-          displayName = userData.firstName;
-        } else if (userData.name) {
-          displayName = userData.name.split(' ')[0];
-        } else if (userData.email) {
+        // Enhanced priority order for display name:
+        // 1. Preferred name (highest priority)
+        // 2. First name
+        // 3. Extract first name from full name
+        // 4. Email username (fallback)
+        // 5. "User" (final fallback)
+        if (userData.preferredName && userData.preferredName.trim()) {
+          displayName = userData.preferredName.trim();
+        } else if (userData.firstName && userData.firstName.trim()) {
+          displayName = userData.firstName.trim();
+        } else if (userData.name && userData.name.trim()) {
+          // Extract first name from full name
+          displayName = userData.name.trim().split(' ')[0];
+        } else if (userData.email && userData.email.trim()) {
+          // Use email username as fallback (everything before @)
           displayName = userData.email.split('@')[0];
         } else {
-          // Check if it's just showing userType instead of name
-          if (userData.userType && userData.userType !== 'professional' && userData.userType !== 'seeker') {
-            displayName = userData.userType;
-          }
+          // Final fallback - use "User" instead of userType
+          displayName = 'User';
         }
         
-        console.log('[Dashboard] Extracted display name:', displayName);
+        console.log('[Dashboard] ✅ Final display name determined:', displayName);
+      } else {
+        console.log('[Dashboard] ⚠️ No user data available, using default');
       }
       
       setUserDisplayName(displayName);
       return displayName;
     } catch (error) {
-      console.error('[Dashboard] Error refreshing display name:', error);
+      console.error('[Dashboard] ❌ Error refreshing display name:', error);
       setUserDisplayName('User');
       return 'User';
     }
-  }, []);
+  }, [fetchFreshUserData]);
 
   // Enhanced localStorage listener to detect changes
   useEffect(() => {
@@ -126,9 +191,43 @@ const Dashboard = () => {
     window.addEventListener('storage', handleStorageChange);
 
     // Listen for custom storage events (same tab updates)
-    const handleCustomStorageUpdate = () => {
-      console.log('[Dashboard] Custom storage update detected');
+    const handleCustomStorageUpdate = (event) => {
+      console.log('[Dashboard] 🔔 Profile update event received');
+      console.log('[Dashboard] Event detail:', event.detail);
+      
+      // Immediately refresh display name from API (not just localStorage)
+      console.log('[Dashboard] 🔄 Auto-refreshing display name due to profile update...');
       refreshUserDisplayName();
+      
+      // If the event contains profile data, update our local state too
+      if (event.detail && (event.detail.firstName || event.detail.name || event.detail.preferredName)) {
+        console.log('[Dashboard] 📝 Updating local user data from profile update event');
+        
+        // Extract the best display name using the same priority logic
+        let firstName = 'User';
+        if (event.detail.preferredName && event.detail.preferredName.trim()) {
+          firstName = event.detail.preferredName.trim();
+        } else if (event.detail.firstName && event.detail.firstName.trim()) {
+          firstName = event.detail.firstName.trim();
+        } else if (event.detail.name && event.detail.name.trim()) {
+          firstName = event.detail.name.trim().split(' ')[0];
+        }
+        
+        const lastName = event.detail.lastName || 
+                        (event.detail.name ? event.detail.name.split(' ').slice(1).join(' ') : '') || 
+                        '';
+        
+        console.log('[Dashboard] 📝 Updating local state with:', { firstName, lastName });
+        
+        setUserData(prev => ({
+          ...prev,
+          firstName: firstName,
+          lastName: lastName
+        }));
+        
+        // Also immediately update the display name without waiting for API
+        setUserDisplayName(firstName);
+      }
     };
 
     window.addEventListener('userDataUpdated', handleCustomStorageUpdate);
@@ -141,7 +240,14 @@ const Dashboard = () => {
 
   // Enhanced useEffect with user data refresh and window focus listener
   useEffect(() => {
-    console.log('Dashboard component loaded');
+    console.log('Dashboard component loaded/remounted');
+    
+    // Always refresh display name when dashboard loads/remounts
+    // This ensures we get fresh data when navigating back from profile
+    setTimeout(() => {
+      console.log('[Dashboard] 🔄 Auto-refreshing on component mount...');
+      refreshUserDisplayName();
+    }, 100);
     
     // Check if user is authenticated using our helper
     const token = getAuthToken();
@@ -373,22 +479,6 @@ const Dashboard = () => {
             }}>
               Welcome back, {userDisplayName}!
             </h1>
-            {isProfessional && (
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                backgroundColor: theme.accent,
-                color: '#ffffff',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                fontSize: '12px',
-                fontWeight: '500'
-              }}>
-                <WorkOutline style={{ fontSize: '16px' }} />
-                Professional
-              </span>
-            )}
           </div>
           <p style={{ 
             fontSize: '16px', 

@@ -25,6 +25,28 @@ export const getApiUrl = (endpoint) => {
   return `${baseUrl}${formattedEndpoint}`;
 };
 
+// Helper to construct profile picture URL from user data
+export const getProfilePictureUrl = (user) => {
+  if (!user) return null;
+  
+  // Check for GridFS profilePhoto data
+  if (user.profilePhoto && user.profilePhoto.fileId) {
+    return `${API_URL}/api/files/file/${user.profilePhoto.fileId}`;
+  }
+  
+  // Fallback to existing profilePicture field  
+  if (user.profilePicture) {
+    return user.profilePicture;
+  }
+  
+  // Check nested profile object
+  if (user.profile && user.profile.profilePicture) {
+    return user.profile.profilePicture;
+  }
+  
+  return null;
+};
+
 // Log configuration once when the file is first imported
 console.log('API configuration initialized:', {
   API_URL,

@@ -62,49 +62,50 @@ export const MessageProvider = ({ children, threadId, userId }) => {
     };
   }, []);
 
-  // Optimized message deduplication with scroll preservation
-  const addMessageToState = useCallback((newMessage) => {
-    const normalizedMessage = normalizeMessage(newMessage);
+  // Add message to state with proper deduplication
+  const addMessageToState = useCallback((message) => {
+    if (!message) return;
+
+    const normalizedMessage = normalizeMessage(message);
     if (!normalizedMessage) return;
 
-    // Save scroll position before state update
-    if (threadId) {
-      saveScrollPosition('message-thread-container', threadId);
-    }
-
-    setMessages(prevMessages => {
-      // Multiple deduplication strategies
-      const isDuplicate = prevMessages.some(existing => {
-        // Check by exact ID
-        if (existing._id === normalizedMessage._id) return true;
+    setMessages(prev => {
+      // Enhanced deduplication check using multiple criteria
+      const messageExists = prev.some(existing => {
+        if (!existing) return false;
         
-        // Check by temp ID
-        if (normalizedMessage.tempId && existing.tempId === normalizedMessage.tempId) return true;
-        
-        // Check by content + sender + time (within 10 seconds)
-        if (existing.content === normalizedMessage.content && 
-            existing.sender === normalizedMessage.sender) {
-          const timeDiff = Math.abs(
-            new Date(existing.createdAt).getTime() - 
-            new Date(normalizedMessage.createdAt).getTime()
-          );
-          if (timeDiff < 10000) return true; // 10 seconds
-        }
-        
-        return false;
+        // Check multiple ID fields to catch duplicates
+        return (
+          // Same _id
+          (existing._id && normalizedMessage._id && existing._id === normalizedMessage._id) ||
+          // Same tempId 
+          (existing.tempId && normalizedMessage.tempId && existing.tempId === normalizedMessage.tempId) ||
+          // Cross-reference: existing._id matches new tempId (server response to temp message)
+          (existing._id && normalizedMessage.tempId && existing._id === normalizedMessage.tempId) ||
+          // Cross-reference: existing.tempId matches new _id (temp message gets real ID)
+          (existing.tempId && normalizedMessage._id && existing.tempId === normalizedMessage._id) ||
+          // Same content, sender, and close timestamp (within 5 seconds)
+          (existing.content === normalizedMessage.content &&
+           existing.sender?._id === normalizedMessage.sender?._id &&
+           Math.abs(new Date(existing.createdAt) - new Date(normalizedMessage.createdAt)) < 5000)
+        );
       });
 
-      if (isDuplicate) {
-        console.log(`[MessageProvider] Duplicate message blocked: ${normalizedMessage._id}`);
-        return prevMessages;
+      if (messageExists) {
+        console.log(`[MessageProvider] Duplicate message ignored:`, {
+          messageId: normalizedMessage._id,
+          tempId: normalizedMessage.tempId,
+          content: normalizedMessage.content?.substring(0, 20)
+        });
+        return prev;
       }
 
       // Add new message and sort
-      const updatedMessages = [...prevMessages, normalizedMessage].sort(
+      const updatedMessages = [...prev, normalizedMessage].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
 
-      console.log(`[MessageProvider] Message added. Count: ${prevMessages.length} → ${updatedMessages.length}`);
+      console.log(`[MessageProvider] Message added. Count: ${prev.length} → ${updatedMessages.length}`);
       
       // Update ref for scroll management
       lastMessageCountRef.current = updatedMessages.length;
@@ -215,12 +216,52 @@ export const MessageProvider = ({ children, threadId, userId }) => {
     // Join thread room
     socketService.emitEvent('join-thread', threadId);
     
-    // Single event listener for new messages
+    // Event handlers
+    const handleNewMessage = (message) => {
+      if (!message) return;
+
+      // Check thread relevance
+      const messageThreadId = message.threadId || 
+                             (message.thread && message.thread._id) || 
+                             (message.thread && typeof message.thread === 'string' ? message.thread : null);
+
+      if (!messageThreadId || messageThreadId !== threadId) {
+        return; // Ignore messages for other threads
+      }
+
+      // Use requestAnimationFrame to batch updates and prevent scroll jumping
+      requestAnimationFrame(() => {
+        addMessageToState(message);
+      });
+    };
+
+    const handleMessageError = (data) => {
+      console.log('[MessageProvider] Message error received:', data);
+      if (data.tempId) {
+        // Remove failed temp message
+        setMessages(prev => prev.filter(m => m.tempId !== data.tempId));
+        setError('Failed to send message');
+      }
+    };
+
+    const handleMessageRemoved = (data) => {
+      console.log('[MessageProvider] Message removed:', data);
+      if (data.tempId) {
+        // Remove temp message
+        setMessages(prev => prev.filter(m => m.tempId !== data.tempId));
+      }
+    };
+    
+    // Register event listeners
     socketService.on('new-message', handleNewMessage);
+    socketService.on('message-error', handleMessageError);
+    socketService.on('message-removed', handleMessageRemoved);
     
     // Cleanup function
     return () => {
       socketService.off('new-message', handleNewMessage);
+      socketService.off('message-error', handleMessageError);
+      socketService.off('message-removed', handleMessageRemoved);
       socketService.emitEvent('leave-thread', threadId);
       
       // Save scroll position when leaving thread
@@ -228,7 +269,7 @@ export const MessageProvider = ({ children, threadId, userId }) => {
         saveScrollPosition('message-thread-container', threadId);
       }
     };
-  }, [threadId, handleNewMessage]);
+  }, [threadId, addMessageToState]);
 
   // Optimized send message function with immediate UI update - FIXED to handle proper parameters
   const sendMessage = useCallback(async (content, attachments = [], replyToId = null, type = 'text') => {
@@ -261,13 +302,16 @@ export const MessageProvider = ({ children, threadId, userId }) => {
       // messageService expects: sendMessage(threadId, content, attachments, replyToId)
       const sentMessage = await messageService.sendMessage(threadId, messageContent, attachments || [], replyToId);
       
-      // Remove temp message and add real message
+      // Replace temp message with server response (prevents duplicates)
       setMessages(prev => {
-        const withoutTemp = prev.filter(m => m.tempId !== tempId);
-        const normalized = normalizeMessage(sentMessage);
-        return normalized ? [...withoutTemp, normalized].sort(
-          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        ) : withoutTemp;
+        return prev.map(msg => {
+          // Replace temp message with real server response
+          if (msg.tempId === tempId) {
+            const normalized = normalizeMessage(sentMessage);
+            return normalized || msg; // Keep temp if normalization fails
+          }
+          return msg;
+        }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       });
 
       return sentMessage;

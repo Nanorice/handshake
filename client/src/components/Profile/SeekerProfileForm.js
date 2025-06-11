@@ -158,107 +158,32 @@ const SeekerProfileForm = ({ initialData, onSave, saving }) => {
   };
 
   const renderResumeStatus = () => {
-    const hasNewFile = profile.resume && profile.resume instanceof File;
     const hasExistingUrl = profile.resumeUrl;
     
-    if (!hasNewFile && !hasExistingUrl) {
-      return (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
-          No resume uploaded yet
-        </Typography>
-      );
+    if (!hasExistingUrl) {
+      return null; // No additional info needed if no resume exists
     }
 
     return (
-      <Box sx={{ 
-        mt: 2,
-        p: 2, 
-        border: '1px solid', 
-        borderColor: 'divider', 
-        borderRadius: 1,
-        backgroundColor: 'grey.50'
-      }}>
-        <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
-          Resume Status:
-        </Typography>
-        
-        {/* Show newly selected file */}
-        {hasNewFile && (
-          <Box sx={{ mb: 1 }}>
-            <Typography variant="body2" color="success.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              🆕 <strong>New file selected:</strong> {profile.resume.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 3 }}>
-              This file will be uploaded when you save your profile
-            </Typography>
-          </Box>
-        )}
-        
-        {/* Show existing resume */}
-        {hasExistingUrl && (
-          <Box sx={{ mb: 1 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              📄 Current resume on file
-            </Typography>
-            <Button
-              variant="text"
-              size="small"
-              onClick={async () => {
-                console.log('Download attempt for:', profile.resumeUrl);
-                try {
-                  // First check if the URL is accessible
-                  const response = await fetch(profile.resumeUrl, {
-                    method: 'HEAD',
-                    headers: {
-                      'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                  });
-                  
-                  console.log('File check response:', response.status, response.statusText);
-                  
-                  if (!response.ok) {
-                    console.error('File not accessible:', response.status, response.statusText);
-                    alert(`File not accessible: ${response.status} ${response.statusText}`);
-                    return;
-                  }
-                  
-                  // Create download link
-                  const link = document.createElement('a');
-                  link.href = profile.resumeUrl;
-                  link.download = `resume_${profile.firstName || 'user'}_${profile.lastName || ''}.pdf`;
-                  link.target = '_blank';
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  console.log('Download initiated successfully');
-                } catch (error) {
-                  console.error('Download error:', error);
-                  alert(`Download failed: ${error.message}`);
-                }
-              }}
-              sx={{ 
-                textTransform: 'none',
-                color: 'primary.main',
-                textDecoration: 'underline',
-                '&:hover': {
-                  textDecoration: 'none'
-                },
-                p: 0,
-                minWidth: 'auto'
-              }}
-            >
-              📥 Download Current Resume
-            </Button>
-          </Box>
-        )}
-        
-        {/* Show file size if available */}
-        {hasNewFile && profile.resume.size && (
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
-            File size: {(profile.resume.size / 1024 / 1024).toFixed(2)} MB
-          </Typography>
-        )}
-      </Box>
+      <Button
+        variant="outlined"
+        onClick={async () => {
+          try {
+            const link = document.createElement('a');
+            link.href = profile.resumeUrl;
+            link.download = `resume.pdf`;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          } catch (error) {
+            console.error('Download error:', error);
+            alert(`Download failed: ${error.message}`);
+          }
+        }}
+      >
+        📥 Download Current Resume
+      </Button>
     );
   };
 
@@ -270,7 +195,7 @@ const SeekerProfileForm = ({ initialData, onSave, saving }) => {
           <Grid item xs={12} md={4}>
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <ProfilePhotoUploader 
-                initialImage={profile.profilePicture || "/placeholder-avatar.jpg"} 
+                initialImage={profile.profilePicture || null} 
                 onSave={(blob, dataUrl) => {
                   setProfile(prev => ({
                     ...prev,
@@ -285,15 +210,38 @@ const SeekerProfileForm = ({ initialData, onSave, saving }) => {
 
           {/* Basic Information */}
           <Grid item xs={12} md={8}>
+            <Typography variant="body2" color="primary" sx={{ mb: 2, fontWeight: 500 }}>
+              💡 Update your First Name, Last Name, or Preferred Name below to change how you're greeted on the dashboard
+            </Typography>
             <Grid container spacing={3}>
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Full Name"
-                  value={profile.name}
-                  onChange={handleChange('name')}
+                  label="Preferred Name (Optional)"
+                  value={profile.preferredName || ''}
+                  onChange={handleChange('preferredName')}
+                  helperText="How you'd like to be addressed (e.g., 'Mike' instead of 'Michael')"
                 />
               </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="First Name"
+                  value={profile.firstName || ''}
+                  onChange={handleChange('firstName')}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Last Name"
+                  value={profile.lastName || ''}
+                  onChange={handleChange('lastName')}
+                  required
+                />
+              </Grid>
+              
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -440,13 +388,12 @@ const SeekerProfileForm = ({ initialData, onSave, saving }) => {
             <Typography variant="h6" gutterBottom>
               Resume
             </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
               <Button
                 variant="outlined"
                 component="label"
-                sx={{ alignSelf: 'flex-start' }}
               >
-                Upload Resume
+                {profile.resumeUrl ? 'Update Resume' : 'Upload Resume'}
                 <input
                   type="file"
                   hidden

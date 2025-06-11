@@ -72,6 +72,7 @@ const Profile = React.memo(() => {
           name: profileData.name || `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || 'Professional User',
           firstName: profileData.firstName || profileData.name?.split(' ')[0] || '',
           lastName: profileData.lastName || profileData.name?.split(' ').slice(1).join(' ') || '',
+          preferredName: profileData.preferredName || '',
           email: profileData.email || '',
           company: profileData.company || '',
           position: profileData.position || profileData.title || '',
@@ -91,13 +92,16 @@ const Profile = React.memo(() => {
             thursday: true,
             friday: true
           },
-          profilePicture: profileData.profilePicture || profileData.profileImage || null
+          profilePicture: profileData.profilePicture || 
+            (profileData.profilePhoto && profileData.profilePhoto.fileId ? `${getApiBaseUrl()}/files/file/${profileData.profilePhoto.fileId}` : null) ||
+            profileData.profileImage || null
         };
       } else {
         completeProfile = {
           name: profileData.name || `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || 'Student User',
           firstName: profileData.firstName || profileData.name?.split(' ')[0] || '',
           lastName: profileData.lastName || profileData.name?.split(' ').slice(1).join(' ') || '',
+          preferredName: profileData.preferredName || '',
           email: profileData.email || '',
           university: profileData.university || profileData.school || '',
           major: profileData.major || profileData.fieldOfStudy || '',
@@ -112,12 +116,16 @@ const Profile = React.memo(() => {
           linkedIn: profileData.linkedIn || profileData.linkedinUrl || '',
           resume: profileData.resume || null,
           resumeUrl: profileData.resumeUrl || (profileData.resume && profileData.resume.fileId ? `${getApiBaseUrl()}/files/file/${profileData.resume.fileId}` : null),
-          profilePicture: profileData.profilePicture || profileData.profileImage || null
+          profilePicture: profileData.profilePicture || 
+            (profileData.profilePhoto && profileData.profilePhoto.fileId ? `${getApiBaseUrl()}/files/file/${profileData.profilePhoto.fileId}` : null) ||
+            profileData.profileImage || null
         };
       }
       
       console.log('[Profile] Final constructed profile resume:', completeProfile.resume);
       console.log('[Profile] Final constructed profile resumeUrl:', completeProfile.resumeUrl);
+      console.log('[Profile] 📸 Profile photo data from API:', profileData.profilePhoto);
+      console.log('[Profile] 📸 Constructed profile picture URL:', completeProfile.profilePicture);
       
       setUserType(currentUserType);
       setUserProfile(completeProfile);
@@ -147,6 +155,43 @@ const Profile = React.memo(() => {
       
       console.log('[Profile] 🔑 Auth token:', token ? 'Present' : 'Missing');
       
+      // CRITICAL: Ensure firstName/lastName are properly extracted from name field
+      const processedProfileData = {
+        ...profileData,
+        // Build name from firstName/lastName if not provided (since we removed the name field from forms)
+        name: profileData.name || `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim(),
+        // Ensure firstName and lastName are included
+        firstName: profileData.firstName || (profileData.name ? profileData.name.split(' ')[0] : ''),
+        lastName: profileData.lastName || (profileData.name ? profileData.name.split(' ').slice(1).join(' ') : ''),
+        // Ensure preferredName is included if provided
+        preferredName: profileData.preferredName || '',
+        // Extract email if it's not already present
+        email: profileData.email || ''
+      };
+      
+      // SYNC LOGIC: If firstName/lastName are provided but name is not, build name from them
+      if ((processedProfileData.firstName || processedProfileData.lastName) && !processedProfileData.name) {
+        processedProfileData.name = `${processedProfileData.firstName || ''} ${processedProfileData.lastName || ''}`.trim();
+      }
+      
+      // SYNC LOGIC: If name is provided but firstName/lastName are empty, extract them
+      if (processedProfileData.name && (!processedProfileData.firstName || !processedProfileData.lastName)) {
+        const nameParts = processedProfileData.name.split(' ');
+        if (!processedProfileData.firstName) {
+          processedProfileData.firstName = nameParts[0] || '';
+        }
+        if (!processedProfileData.lastName) {
+          processedProfileData.lastName = nameParts.slice(1).join(' ') || '';
+        }
+      }
+      
+      console.log('[Profile] 🔍 Processed profile data with name sync:', {
+        name: processedProfileData.name,
+        firstName: processedProfileData.firstName,
+        lastName: processedProfileData.lastName,
+        preferredName: processedProfileData.preferredName
+      });
+      
       // Handle profile picture upload if present
       if (profileData.profilePictureFile) {
         console.log('[Profile] 📸 Uploading profile picture...');
@@ -166,7 +211,7 @@ const Profile = React.memo(() => {
           });
           
           if (uploadResponse.data.success) {
-            profileData.profilePicture = uploadResponse.data.data.url;
+            processedProfileData.profilePicture = uploadResponse.data.data.url;
             uploadResults.profilePicture = uploadResponse.data.data.url;
             console.log('[Profile] ✅ Profile picture uploaded successfully:', uploadResults.profilePicture);
           } else {
@@ -197,7 +242,7 @@ const Profile = React.memo(() => {
           });
           
           if (uploadResponse.data.success) {
-            profileData.resumeUrl = uploadResponse.data.data.url;
+            processedProfileData.resumeUrl = uploadResponse.data.data.url;
             uploadResults.resume = uploadResponse.data.data.url;
             console.log('[Profile] ✅ Resume uploaded successfully:', uploadResults.resume);
           } else {
@@ -217,9 +262,9 @@ const Profile = React.memo(() => {
           const baseUrl = getApiBaseUrl();
           const profileUrl = `${baseUrl}/auth/profile`;
           console.log('[Profile] 💾 Saving to:', profileUrl);
-          console.log('[Profile] 💾 Data being sent:', profileData);
+          console.log('[Profile] 💾 Processed data being sent:', processedProfileData);
           
-          const response = await axios.put(profileUrl, profileData, {
+          const response = await axios.put(profileUrl, processedProfileData, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
@@ -242,23 +287,23 @@ const Profile = React.memo(() => {
         console.log('[Profile] ⚠️ Skipping API save - no token');
       }
       
-      // Update localStorage with new profile data using the enhanced utility
+      // Update localStorage with processed profile data using the enhanced utility
       console.log('[Profile] 💾 Updating localStorage...');
-      const updateSuccess = updateUserProfile(profileData);
+      const updateSuccess = updateUserProfile(processedProfileData);
       console.log('[Profile] 💾 localStorage update:', updateSuccess ? 'SUCCESS' : 'FAILED');
       
       // Verify what's actually in localStorage now
       const currentStoredData = JSON.parse(localStorage.getItem('userData') || '{}');
-      console.log('[Profile] 🔍 Current localStorage userData:', currentStoredData);
+      console.log('[Profile] 🔍 Current localStorage userData after update:', currentStoredData);
       
       // Dispatch custom event to notify other components (like Dashboard) to refresh
       console.log('[Profile] 📢 Dispatching userDataUpdated event...');
       window.dispatchEvent(new CustomEvent('userDataUpdated', { 
-        detail: profileData 
+        detail: processedProfileData 
       }));
       
       // Update local state to reflect changes immediately
-      setUserProfile(prev => ({ ...prev, ...profileData }));
+      setUserProfile(prev => ({ ...prev, ...processedProfileData }));
       
       // Show comprehensive success message
       const successDetails = [

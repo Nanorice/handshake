@@ -231,24 +231,49 @@ export const getUserDisplayName = () => {
     const userData = getUserData();
     if (!userData) return 'User';
     
-    // Try to construct name from firstName/lastName
-    if (userData.firstName) {
-      return userData.firstName;
+    console.log('[authUtils] Getting display name from userData:', {
+      preferredName: userData.preferredName,
+      firstName: userData.firstName, 
+      name: userData.name,
+      email: userData.email
+    });
+    
+    // Enhanced priority logic:
+    // 1. Preferred name (highest priority)
+    // 2. First name
+    // 3. Extract first name from full name
+    // 4. Email username (fallback)
+    // 5. "User" (final fallback)
+    if (userData.preferredName && userData.preferredName.trim()) {
+      console.log('[authUtils] Using preferredName:', userData.preferredName.trim());
+      return userData.preferredName.trim();
     }
     
-    // Try to extract from full name
-    if (userData.name) {
-      return userData.name.split(' ')[0];
+    // Try to get name from firstName (second priority)
+    if (userData.firstName && userData.firstName.trim()) {
+      console.log('[authUtils] Using firstName:', userData.firstName.trim());
+      return userData.firstName.trim();
     }
     
-    // Try to extract from email
-    if (userData.email) {
-      return userData.email.split('@')[0];
+    // Try to extract first name from full name
+    if (userData.name && userData.name.trim()) {
+      const extractedFirstName = userData.name.trim().split(' ')[0];
+      console.log('[authUtils] Extracted from name:', extractedFirstName);
+      return extractedFirstName;
     }
     
+    // Try to extract from email username
+    if (userData.email && userData.email.trim()) {
+      const emailUsername = userData.email.split('@')[0];
+      console.log('[authUtils] Using email username:', emailUsername);
+      return emailUsername;
+    }
+    
+    // Final fallback - never show userType
+    console.log('[authUtils] Using final fallback: User');
     return 'User';
   } catch (error) {
-    console.error('Error getting user display name:', error);
+    console.error('[authUtils] Error getting user display name:', error);
     return 'User';
   }
 };
